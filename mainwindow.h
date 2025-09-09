@@ -11,6 +11,7 @@
 #include <QProgressBar>
 
 #include "addsoundfeaturewidget.h"
+#include "resourcemanager.h"
 
 /**
  * @brief Main window class for the Audio Separation Tool application.
@@ -38,7 +39,6 @@ private:
     QHBoxLayout* mainLayout;          ///< Main horizontal layout (sidebar + content)
     QStackedWidget* stackedContent;   ///< Stacked widget for different content pages
     QProgressBar* globalProgressBar;  ///< Global progress bar at the bottom
-    QSet<QString> lockedFiles;
     AddSoundFeatureWidget* addSoundFeatureWidget;
 
     // Setup Methods

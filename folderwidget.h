@@ -42,6 +42,12 @@ public:
      */
     void appendFiles(const QStringList& files);
 
+    /**
+     * @brief Gets the list of selected file paths.
+     * @return List of selected file paths.
+     */
+    QStringList getSelectedFiles() const;
+
 protected:
     /**
      * @brief Event filter to handle mouse events on header and labels.

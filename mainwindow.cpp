@@ -110,41 +110,41 @@ void MainWindow::setupContent()
 
     stackedContent->setCurrentIndex(0); // Default to "How to Use"
 
-    connect(addSoundFeatureWidget, &AddSoundFeatureWidget::fileAdded,
-            this, [this](const QString& path){
-                if (!FileUtils::setFileReadOnly(path, true)) {
-                    QMessageBox::warning(this, "File Lock Error", "Failed to set file to read-only: " + path);
-                } else {
-                    lockedFiles.insert(path);
+    // Connect to ResourceManager signals for locking
+    ResourceManager* rm = ResourceManager::instance();
+    connect(rm, &ResourceManager::fileAdded,
+            this, [this, rm](const QString& path, ResourceManager::FileType type){
+                if (type == ResourceManager::FileType::WavForFeature) {
+                    if (!rm->lockFile(path)) {
+                        QMessageBox::warning(this, "File Lock Error", "Failed to set file to read-only: " + path);
+                    }
                 }
             });
-    connect(addSoundFeatureWidget, &AddSoundFeatureWidget::fileRemoved,
-            this, [this](const QString& path){
-                if (!FileUtils::setFileReadOnly(path, false)) {
-                    QMessageBox::warning(this, "File Unlock Error", "Failed to remove read-only from file: " + path);
-                } else {
-                    lockedFiles.remove(path);
+    connect(rm, &ResourceManager::fileRemoved,
+            this, [this, rm](const QString& path, ResourceManager::FileType type){
+                if (type == ResourceManager::FileType::WavForFeature) {
+                    if (!rm->unlockFile(path)) {
+                        QMessageBox::warning(this, "File Unlock Error", "Failed to remove read-only from file: " + path);
+                    }
                 }
             });
 
-    connect(addSoundFeatureWidget, &AddSoundFeatureWidget::folderRemoved,
-            this, [this](const QString& folderPath){
-                // Unlock all files in the folder
-                QSet<QString> toRemove;
-                for (const QString& filePath : lockedFiles) {
-                    if (filePath.startsWith(folderPath + "/")) {
-                        if (!FileUtils::setFileReadOnly(filePath, false)) {
-                            QMessageBox::warning(this, "File Unlock Error", "Failed to remove read-only from file: " + filePath);
+    connect(rm, &ResourceManager::folderRemoved,
+            this, [this, rm](const QString& folderPath, ResourceManager::FileType type){
+                if (type == ResourceManager::FileType::WavForFeature) {
+                    // Unlock all files in the folder
+                    QSet<QString> addedFiles = rm->getAddedFiles(type);
+                    for (const QString& filePath : addedFiles) {
+                        if (filePath.startsWith(folderPath + "/")) {
+                            if (!rm->unlockFile(filePath)) {
+                                QMessageBox::warning(this, "File Unlock Error", "Failed to remove read-only from file: " + filePath);
+                            }
                         }
-                        toRemove.insert(filePath);
                     }
-                }
-                for (const QString& filePath : toRemove) {
-                    lockedFiles.remove(filePath);
-                }
-                // Also unlock the folder itself if it was set
-                if (!FileUtils::setFileReadOnly(folderPath, false)) {
-                    // Ignore if fails, as folder might not be set
+                    // Also unlock the folder itself if it was set
+                    if (!FileUtils::setFileReadOnly(folderPath, false)) {
+                        // Ignore if fails, as folder might not be set
+                    }
                 }
             });
 }

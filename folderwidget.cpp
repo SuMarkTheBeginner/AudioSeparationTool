@@ -225,3 +225,27 @@ WideCheckBox* FolderWidget::findCheckBoxByText(const QString& text) const
     }
     return nullptr;
 }
+
+/**
+ * @brief Gets the list of selected file paths.
+ * @return List of selected file paths.
+ */
+QStringList FolderWidget::getSelectedFiles() const
+{
+    QStringList selected;
+    QDir dir(m_folderPath);
+    if (folderCheckBox->checkState() == Qt::Checked) {
+        // All files selected
+        for (WideCheckBox* cb : filesCheckBoxes) {
+            selected.append(dir.absoluteFilePath(cb->text()));
+        }
+    } else {
+        // Check individual
+        for (WideCheckBox* cb : filesCheckBoxes) {
+            if (cb->isChecked()) {
+                selected.append(dir.absoluteFilePath(cb->text()));
+            }
+        }
+    }
+    return selected;
+}

@@ -6,6 +6,7 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMap>
 #include <QSet>
 #include <QDragEnterEvent>
@@ -47,6 +48,12 @@ public:
      */
     void sortAll(SortType type);
 
+    /**
+     * @brief Gets the output file name from the input field.
+     * @return The file name entered by the user.
+     */
+    QString getOutputFileName() const;
+
 protected:
     /**
      * @brief Handles drag enter events for drag-and-drop functionality.
@@ -79,10 +86,12 @@ private:
 
     // Buttons
     QPushButton* selectFolderBtn; ///< Button to select a folder
+    QPushButton* selectFilesBtn; ///< Button to select WAV files
     QPushButton* createFeatureBtn; ///< Button to create the feature
 
-    // Data Management
-    QSet<QString> addedFilePaths; ///< Set of added file paths to prevent duplicates
+    // File Name Input
+    QLabel* fileNameLabel;       ///< Label for file name input
+    QLineEdit* fileNameInput;     ///< Input field for generated file name
 
     // Private Methods
     void setupUI();                           ///< Sets up the user interface
@@ -90,9 +99,7 @@ private:
     void addSingleFile(const QString& filePath); ///< Adds a single WAV file
 
 signals:
-    void fileAdded(const QString& path);
-    void fileRemoved(const QString& path);
-    void folderRemoved(const QString& folderPath);
+    // Signals are now handled by ResourceManager
 };
 
 #endif // ADDSOUNDFEATUREWIDGET_H
