@@ -1,0 +1,60 @@
+# ---- OS / Editor ----
+*~
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ---- CMake ----
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Testing/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+
+# ---- Build folders ----
+build/
+build-*/
+out/
+bin/
+lib/
+
+# ---- Qt ----
+*.pro.user
+*.qbs.user
+*.qmlc
+*.jsc
+*.moc
+*.obj
+*.o
+*.a
+*.so
+*.so.*
+*.dll
+*.exe
+*.app
+*.dSYM/
+
+# ---- Libtorch ----
+# （建議不要把整個 libtorch 傳上 GitHub，因為太大）
+libtorch/
+
+# ---- Logs / Temp ----
+*.log
+*.tmp
+*.bak
+
+# ---- Translation files (generated) ----
+*.qm
+
+# ---- VSCode / JetBrains ----
+.vscode/
+.idea/
+
+# ---- Python virtualenv (如果有用到） ----
+.venv/
+venv/
