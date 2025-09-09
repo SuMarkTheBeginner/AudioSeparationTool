@@ -6,11 +6,20 @@
 #include <sndfile.h>
 #include <samplerate.h>
 
+/**
+ * @brief Constructs the HTSATProcessor.
+ * @param parent The parent QObject (default is nullptr).
+ */
 HTSATProcessor::HTSATProcessor(QObject *parent)
     : QObject(parent), modelLoaded(false)
 {
 }
 
+/**
+ * @brief Loads the TorchScript model from the specified path.
+ * @param modelPath Path to the TorchScript model file (e.g., "htsat_embedding_model.pt").
+ * @return True if loading succeeded, false otherwise.
+ */
 bool HTSATProcessor::loadModel(const QString& modelPath)
 {
     try {
@@ -25,6 +34,11 @@ bool HTSATProcessor::loadModel(const QString& modelPath)
     }
 }
 
+/**
+ * @brief Reads and resamples audio file to 32kHz.
+ * @param audioPath Path to the audio file.
+ * @return Resampled audio data as vector of floats.
+ */
 std::vector<float> HTSATProcessor::readAndResampleAudio(const QString& audioPath)
 {
     std::vector<float> resampledData;
@@ -88,6 +102,11 @@ std::vector<float> HTSATProcessor::readAndResampleAudio(const QString& audioPath
     return resampledData;
 }
 
+/**
+ * @brief Prepares the tensor for model input.
+ * @param audioData The resampled audio data.
+ * @return The prepared tensor.
+ */
 torch::Tensor HTSATProcessor::prepareTensor(const std::vector<float>& audioData)
 {
     // The model expects input shape (B, T) with T = 320000 (10 seconds at 32kHz)
@@ -104,6 +123,11 @@ torch::Tensor HTSATProcessor::prepareTensor(const std::vector<float>& audioData)
     return tensor;
 }
 
+/**
+ * @brief Processes an audio file to generate an embedding.
+ * @param audioPath Path to the audio file (WAV format).
+ * @return The generated embedding as a vector of floats, or empty vector on failure.
+ */
 std::vector<float> HTSATProcessor::processAudio(const QString& audioPath)
 {
     if (!modelLoaded) {
@@ -133,6 +157,10 @@ std::vector<float> HTSATProcessor::processAudio(const QString& audioPath)
     }
 }
 
+/**
+ * @brief Checks if the model is loaded and ready for inference.
+ * @return True if model is loaded, false otherwise.
+ */
 bool HTSATProcessor::isModelLoaded() const
 {
     return modelLoaded;
