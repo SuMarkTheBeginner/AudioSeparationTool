@@ -344,6 +344,10 @@ void ResourceManager::generateAudioFeatures(const QStringList& filePaths, const 
     // Load model if not loaded
     if (!m_htsatProcessor->isModelLoaded()) {
         QString modelPath = "models/htsat_embedding_model.pt";
+        qDebug() << "Current working directory:" << QDir::currentPath();
+        qDebug() << "Model path:" << modelPath;
+        QFileInfo fi(modelPath);
+        qDebug() << "Absolute model path:" << fi.absoluteFilePath();
         if (!loadModel(modelPath)) {
             qDebug() << "Failed to load HTSAT model from:" << modelPath;
             return;
