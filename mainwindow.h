@@ -62,6 +62,11 @@ private slots:
      */
     void showUseFeature();
 
+    /**
+     * @brief Slot to update the global progress bar.
+     * @param value Progress value (0-100).
+     */
+    void updateProgress(int value);
 
 };
 

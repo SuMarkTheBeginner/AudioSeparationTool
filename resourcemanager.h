@@ -66,6 +66,7 @@ signals:
     void folderRemoved(const QString& folderPath, ResourceManager::FileType type);
     void fileLocked(const QString& path);
     void fileUnlocked(const QString& path);
+    void progressUpdated(int value);
 
 private:
     // Singleton pattern

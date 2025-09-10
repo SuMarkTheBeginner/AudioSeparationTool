@@ -7,6 +7,7 @@
 #include <QFile>
 #include <QTextStream>
 #include <vector>
+#include <QDateTime>
 
 // Singleton instance
 ResourceManager* ResourceManager::m_instance = nullptr;
@@ -355,13 +356,17 @@ void ResourceManager::generateAudioFeatures(const QStringList& filePaths, const 
     }
 
     QVector<std::vector<float>> embeddings;
-    for (const QString& filePath : filePaths) {
+    int totalFiles = filePaths.size();
+    for (int i = 0; i < totalFiles; ++i) {
+        const QString& filePath = filePaths[i];
         std::vector<float> embedding = m_htsatProcessor->processAudio(filePath);
         if (embedding.empty()) {
             qDebug() << "Failed to process file:" << filePath;
             continue;
         }
         embeddings.append(embedding);
+        int progress = (i + 1) * 100 / totalFiles;
+        emit progressUpdated(progress);
     }
 
     if (embeddings.isEmpty()) {
@@ -369,22 +374,53 @@ void ResourceManager::generateAudioFeatures(const QStringList& filePaths, const 
         return;
     }
 
-    // Save to file
-    QFile file(outputFileName);
+    // Define output folder
+    QString outputFolder = "output_features";
+    QDir dir(outputFolder);
+    if (!dir.exists()) {
+        if (!dir.mkpath(".")) {
+            qDebug() << "Failed to create output folder:" << outputFolder;
+            return;
+        }
+    }
+
+    // Generate timestamp
+    QString timestamp = QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss");
+
+    // Construct base name
+    QString baseName = QFileInfo(outputFileName).baseName();
+    if (baseName.isEmpty()) {
+        baseName = "output";
+    }
+
+    // Construct full output file path with timestamp
+    QString finalOutputFileName = outputFolder + "/" + baseName + "_" + timestamp + ".txt";
+
+    // Compute average embedding
+    std::vector<float> avg_emb(embeddings[0].size(), 0.0f);
+    for (const auto& emb : embeddings) {
+        for (size_t i = 0; i < emb.size(); ++i) {
+            avg_emb[i] += emb[i];
+        }
+    }
+    for (size_t i = 0; i < avg_emb.size(); ++i) {
+        avg_emb[i] /= embeddings.size();
+    }
+
+    // Save averaged embedding to file
+    QFile file(finalOutputFileName);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        qDebug() << "Failed to open output file:" << outputFileName;
+        qDebug() << "Failed to open output file:" << finalOutputFileName;
         return;
     }
 
     QTextStream out(&file);
-    for (const auto& emb : embeddings) {
-        for (size_t i = 0; i < emb.size(); ++i) {
-            out << emb[i];
-            if (i < emb.size() - 1) out << " ";
-        }
-        out << "\n";
+    for (size_t i = 0; i < avg_emb.size(); ++i) {
+        out << avg_emb[i];
+        if (i < avg_emb.size() - 1) out << " ";
     }
+    out << "\n";
     file.close();
 
-    qDebug() << "Embeddings saved to:" << outputFileName;
+    qDebug() << "Averaged embedding saved to:" << finalOutputFileName;
 }

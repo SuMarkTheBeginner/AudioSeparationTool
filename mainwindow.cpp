@@ -147,6 +147,9 @@ void MainWindow::setupContent()
                     }
                 }
             });
+
+    // Connect progressUpdated signal to updateProgress slot
+    connect(rm, &ResourceManager::progressUpdated, this, &MainWindow::updateProgress);
 }
 
 // Slot implementations
@@ -173,5 +176,14 @@ void MainWindow::showAddFeature()
 void MainWindow::showUseFeature()
 {
     stackedContent->setCurrentIndex(2);
+}
+
+/**
+ * @brief Slot to update the global progress bar.
+ * @param value Progress value (0-100).
+ */
+void MainWindow::updateProgress(int value)
+{
+    globalProgressBar->setValue(value);
 }
 
