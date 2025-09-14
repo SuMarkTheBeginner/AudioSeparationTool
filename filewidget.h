@@ -5,6 +5,7 @@
 #include <QCheckBox>
 #include <QLabel>
 #include <QVBoxLayout>
+#include <QToolButton>
 
 /**
  * @brief Widget representing a single WAV file with a checkbox.
@@ -55,6 +56,7 @@ private:
     QLabel* fileNameLabel;    ///< Label displaying the file name
     QLabel* filePathLabel;    ///< Label displaying the full file path
     QVBoxLayout* mainLayout;  ///< Main vertical layout
+    QToolButton* playButton;  ///< Button to play the audio file
 
     /**
      * @brief Sets up the user interface components.
@@ -63,6 +65,7 @@ private:
 
 signals:
     void fileRemoved(const QString& filePath);
+    void playRequested(const QString& filePath);
 };
 
 #endif // FILEWIDGET_H

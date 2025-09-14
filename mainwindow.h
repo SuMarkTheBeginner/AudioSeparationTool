@@ -11,7 +11,9 @@
 #include <QProgressBar>
 
 #include "addsoundfeaturewidget.h"
+#include "usefeaturewidget.h"
 #include "resourcemanager.h"
+#include "audioplayer.h"
 
 /**
  * @brief Main window class for the Audio Separation Tool application.
@@ -40,6 +42,7 @@ private:
     QStackedWidget* stackedContent;   ///< Stacked widget for different content pages
     QProgressBar* globalProgressBar;  ///< Global progress bar at the bottom
     AddSoundFeatureWidget* addSoundFeatureWidget;
+    AudioPlayer* audioPlayer;         ///< Audio player widget for playback control
 
     // Setup Methods
     void setupUI();       ///< Initializes the main UI components and layout
@@ -67,6 +70,12 @@ private slots:
      * @param value Progress value (0-100).
      */
     void updateProgress(int value);
+
+    /**
+     * @brief Slot to handle play request from file widgets.
+     * @param filePath Path to the audio file to play.
+     */
+    void onPlayRequested(const QString& filePath);
 
 };
 

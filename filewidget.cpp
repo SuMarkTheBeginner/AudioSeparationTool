@@ -50,6 +50,13 @@ void FileWidget::setupUI()
     fileNameLabel = new QLabel(fi.fileName(), headerWidget);
     headerLayout->addWidget(fileNameLabel, 1);
 
+    // Play button
+    playButton = new QToolButton(headerWidget);
+    playButton->setText("▶"); // Play icon
+    playButton->setToolTip("播放此檔案");
+    playButton->setFixedSize(20, 20);
+    headerLayout->addWidget(playButton);
+
     // Remove button ("X")
     QToolButton* removeButton = new QToolButton(headerWidget);
     removeButton->setText("✕"); // 或者用 "X"、垃圾桶圖示
@@ -67,10 +74,20 @@ void FileWidget::setupUI()
     // Install event filter for checkbox toggle
     headerWidget->installEventFilter(this);
 
+    // --- Connect play button ---
+    connect(playButton, &QToolButton::clicked, this, [this]() {
+        emit playRequested(m_filePath);
+    });
+
     // --- Connect remove button ---
     connect(removeButton, &QToolButton::clicked, this, [this]() {
         emit fileRemoved(m_filePath);  // 自訂一個 signal 給外部 MainWindow
         this->deleteLater();           // 自己刪掉自己
+    });
+
+    // --- Connect play button ---
+    connect(playButton, &QToolButton::clicked, this, [this]() {
+        emit playRequested(m_filePath);
     });
 }
 

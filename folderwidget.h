@@ -100,10 +100,12 @@ private:
      */
     void toggleFilesVisible();
 
+    bool m_updatingCheckStates = false; ///< Flag to prevent recursive updates
 
 signals:
     void fileRemoved(const QString& filePath);
     void folderRemoved(const QString& folderPath);
+    void playRequested(const QString& filePath);
 
 };
 

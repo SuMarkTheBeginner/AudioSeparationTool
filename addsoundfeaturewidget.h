@@ -99,7 +99,7 @@ private:
     void addSingleFile(const QString& filePath); ///< Adds a single WAV file
 
 signals:
-    // Signals are now handled by ResourceManager
+    void playRequested(const QString& filePath);
 };
 
 #endif // ADDSOUNDFEATUREWIDGET_H

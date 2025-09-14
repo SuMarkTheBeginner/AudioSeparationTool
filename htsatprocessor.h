@@ -48,6 +48,13 @@ public:
      */
     bool isModelLoaded() const;
 
+    /**
+     * @brief Reads and resamples audio file to 32kHz.
+     * @param audioPath Path to the audio file.
+     * @return Resampled audio data as vector of floats.
+     */
+    std::vector<float> readAndResampleAudio(const QString& audioPath);
+
 signals:
     /**
      * @brief Emitted when an error occurs during processing.
@@ -64,13 +71,6 @@ signals:
 private:
     torch::jit::script::Module model; ///< The loaded TorchScript model
     bool modelLoaded;                 ///< Flag indicating if the model is loaded
-
-    /**
-     * @brief Reads and resamples audio file to 32kHz.
-     * @param audioPath Path to the audio file.
-     * @return Resampled audio data as vector of floats.
-     */
-    std::vector<float> readAndResampleAudio(const QString& audioPath);
 
     /**
      * @brief Prepares the tensor for model input.

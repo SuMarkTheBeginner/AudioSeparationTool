@@ -39,10 +39,14 @@ void MainWindow::setupUI()
     mainLayout->addWidget(stackedContent, 1); // Stretch factor for content
     mainVLayout->addLayout(mainLayout, 1);    // Stretch to fill remaining space
 
+    // Audio player control bar
+    audioPlayer = new AudioPlayer(this);
+    mainVLayout->addWidget(audioPlayer);
+
     // Global progress bar fixed at the bottom
     globalProgressBar = new QProgressBar(this);
     globalProgressBar->setRange(0, 100);
-    globalProgressBar->setValue(50);
+    globalProgressBar->setValue(0);
     globalProgressBar->setTextVisible(false); // Hide percentage text
     globalProgressBar->setFixedHeight(18);    // Custom height
     mainVLayout->addWidget(globalProgressBar);
@@ -99,14 +103,13 @@ void MainWindow::setupContent()
 
     QTextEdit* howToUsePage = new QTextEdit("This is the How to Use page.", this);
     addSoundFeatureWidget = new AddSoundFeatureWidget(this);
-    QTextEdit* useFeaturePage = new QTextEdit("This is the Use Existing Sound Feature page.", this);
+    UseFeatureWidget* useFeatureWidget = new UseFeatureWidget(this);
 
     howToUsePage->setReadOnly(true);
-    useFeaturePage->setReadOnly(true);
 
     stackedContent->addWidget(howToUsePage);                   // Index 0
     stackedContent->addWidget(addSoundFeatureWidget);          // Index 1
-    stackedContent->addWidget(useFeaturePage);                 // Index 2
+    stackedContent->addWidget(useFeatureWidget);                 // Index 2
 
     stackedContent->setCurrentIndex(0); // Default to "How to Use"
 
@@ -150,6 +153,14 @@ void MainWindow::setupContent()
 
     // Connect progressUpdated signal to updateProgress slot
     connect(rm, &ResourceManager::progressUpdated, this, &MainWindow::updateProgress);
+
+    // Connect playRequested from AddSoundFeatureWidget
+    connect(addSoundFeatureWidget, &AddSoundFeatureWidget::playRequested, this, &MainWindow::onPlayRequested);
+    // Connect playRequested from UseFeatureWidget
+    connect(useFeatureWidget, &UseFeatureWidget::playRequested, this, &MainWindow::onPlayRequested);
+
+    // Connect featuresUpdated signal to refresh UseFeatureWidget features
+    connect(rm, &ResourceManager::featuresUpdated, useFeatureWidget, &UseFeatureWidget::refreshFeatures);
 }
 
 // Slot implementations
@@ -185,5 +196,14 @@ void MainWindow::showUseFeature()
 void MainWindow::updateProgress(int value)
 {
     globalProgressBar->setValue(value);
+}
+
+/**
+ * @brief Slot to handle play request from file widgets.
+ * @param filePath Path to the audio file to play.
+ */
+void MainWindow::onPlayRequested(const QString& filePath)
+{
+    audioPlayer->playAudio(filePath);
 }
 

@@ -222,6 +222,10 @@ void AddSoundFeatureWidget::addFolder(const QString& folderPath)
             folderLayout->removeWidget(folderWidget);
             // Widget is deleted in ResourceManager
         });
+
+        connect(folderWidget, &FolderWidget::playRequested, this, [this](const QString& path){
+            emit playRequested(path);
+        });
     }
 }
 
@@ -263,6 +267,12 @@ void AddSoundFeatureWidget::addSingleFile(const QString& filePath)
         connect(fileWidget, &FileWidget::fileRemoved,
                 this, [this, rm](const QString& path){
                     rm->removeFile(path);
+                });
+
+        connect(fileWidget, &FileWidget::playRequested,
+                this, [this](const QString& path){
+                    // Emit to MainWindow
+                    emit playRequested(path);
                 });
     }
 }

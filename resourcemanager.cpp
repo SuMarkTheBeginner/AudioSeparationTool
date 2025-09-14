@@ -1,4 +1,6 @@
 #include "resourcemanager.h"
+#include <torch/script.h>
+#include <torch/torch.h>
 #include "fileutils.h"
 #include <QDir>
 #include <QFileInfo>
@@ -32,6 +34,7 @@ ResourceManager::ResourceManager(QObject* parent)
     : QObject(parent)
 {
     m_htsatProcessor = new HTSATProcessor(this);
+    m_zeroShotAspProcessor = new ZeroShotASPFeatureExtractor(this);
 }
 
 /**
@@ -39,15 +42,35 @@ ResourceManager::ResourceManager(QObject* parent)
  */
 ResourceManager::~ResourceManager()
 {
-    // Cleanup widgets
-    for (auto widget : m_folderMap.values()) {
+    // Cleanup widgets for WavForFeature
+    for (auto widget : m_wavForFeatureFolders.values()) {
         delete widget;
     }
-    for (auto widget : m_singleFileMap.values()) {
+    for (auto widget : m_wavForFeatureFiles.values()) {
         delete widget;
     }
-    m_folderMap.clear();
-    m_singleFileMap.clear();
+    m_wavForFeatureFolders.clear();
+    m_wavForFeatureFiles.clear();
+
+    // Cleanup widgets for WavForSeparation
+    for (auto widget : m_wavForSeparationFolders.values()) {
+        delete widget;
+    }
+    for (auto widget : m_wavForSeparationFiles.values()) {
+        delete widget;
+    }
+    m_wavForSeparationFolders.clear();
+    m_wavForSeparationFiles.clear();
+
+    // Cleanup widgets for SoundFeature
+    for (auto widget : m_soundFeatureFolders.values()) {
+        delete widget;
+    }
+    for (auto widget : m_soundFeatureFiles.values()) {
+        delete widget;
+    }
+    m_soundFeatureFolders.clear();
+    m_soundFeatureFiles.clear();
 }
 
 /**
@@ -58,8 +81,8 @@ ResourceManager::~ResourceManager()
  */
 FolderWidget* ResourceManager::addFolder(const QString& folderPath, QWidget* folderParent, FileType type)
 {
-    if (type != FileType::WavForFeature) {
-        qDebug() << "FileType not yet supported:" << static_cast<int>(type);
+    if (type != FileType::WavForFeature && type != FileType::WavForSeparation && type != FileType::SoundFeature) {
+        qDebug() << "FileType not supported:" << static_cast<int>(type);
         return nullptr;
     }
 
@@ -69,30 +92,56 @@ FolderWidget* ResourceManager::addFolder(const QString& folderPath, QWidget* fol
         return nullptr;
     }
 
-    QStringList wavFiles = dir.entryList(QStringList() << "*.wav", QDir::Files);
-    if (wavFiles.isEmpty()) {
-        qDebug() << "No WAV files found in folder:" << folderPath;
+    QStringList fileFilters;
+    QString fileTypeDescription;
+    if (type == FileType::WavForFeature || type == FileType::WavForSeparation) {
+        fileFilters << "*.wav";
+        fileTypeDescription = "WAV";
+    } else if (type == FileType::SoundFeature) {
+        fileFilters << "*.txt";
+        fileTypeDescription = "sound feature";
+    }
+
+    QStringList files = dir.entryList(fileFilters, QDir::Files);
+    if (files.isEmpty()) {
+        qDebug() << "No" << fileTypeDescription << "files found in folder:" << folderPath;
         return nullptr;
     }
 
-    qDebug() << "Adding folder:" << folderPath << "with" << wavFiles.size() << "WAV files";
+    qDebug() << "Adding folder:" << folderPath << "with" << files.size() << fileTypeDescription << "files";
+
+    // Get the appropriate maps based on type
+    QMap<QString, FolderWidget*>* folderMap = nullptr;
+    QSet<QString>* pathSet = nullptr;
+    if (type == FileType::WavForFeature) {
+        folderMap = &m_wavForFeatureFolders;
+        pathSet = &m_wavForFeaturePaths;
+    } else if (type == FileType::WavForSeparation) {
+        folderMap = &m_wavForSeparationFolders;
+        pathSet = &m_wavForSeparationPaths;
+    } else if (type == FileType::SoundFeature) {
+        folderMap = &m_soundFeatureFolders;
+        pathSet = &m_soundFeaturePaths;
+    }
+
+    if (!folderMap || !pathSet) return nullptr;
 
     // Create FolderWidget if not exists
     FolderWidget* folderWidget = nullptr;
-    if (m_folderMap.contains(folderPath)) {
-        folderWidget = m_folderMap[folderPath];
+    if (folderMap->contains(folderPath)) {
+        folderWidget = (*folderMap)[folderPath];
     } else {
         folderWidget = new FolderWidget(folderPath, folderParent);
-        m_folderMap.insert(folderPath, folderWidget);
+        folderMap->insert(folderPath, folderWidget);
         emitFolderAdded(folderPath, type);
     }
 
     QStringList newFiles;
-    for (const QString& f : wavFiles) {
+    for (const QString& f : files) {
         QString fullPath = dir.absoluteFilePath(f);
         if (!isDuplicate(fullPath, type)) {
             newFiles.append(f);
-            m_addedFilePaths.insert(fullPath);
+            pathSet->insert(fullPath);
             emitFileAdded(fullPath, type);
         }
     }
@@ -112,14 +161,26 @@ FolderWidget* ResourceManager::addFolder(const QString& folderPath, QWidget* fol
  */
 FileWidget* ResourceManager::addSingleFile(const QString& filePath, QWidget* fileParent, FileType type)
 {
-    if (type != FileType::WavForFeature) {
-        qDebug() << "FileType not yet supported:" << static_cast<int>(type);
+    if (type != FileType::WavForFeature && type != FileType::WavForSeparation && type != FileType::SoundFeature) {
+        qDebug() << "FileType not supported:" << static_cast<int>(type);
         return nullptr;
     }
 
     QFileInfo fi(filePath);
-    if (!fi.exists() || !fi.isReadable() || fi.suffix().toLower() != "wav") {
+    if (!fi.exists() || !fi.isReadable()) {
         qDebug() << "Invalid file:" << filePath;
+        return nullptr;
+    }
+
+    QString expectedSuffix;
+    if (type == FileType::WavForFeature || type == FileType::WavForSeparation) {
+        expectedSuffix = "wav";
+    } else if (type == FileType::SoundFeature) {
+        expectedSuffix = "txt";
+    }
+
+    if (fi.suffix().toLower() != expectedSuffix) {
+        qDebug() << "Invalid file type for" << static_cast<int>(type) << ":" << filePath;
         return nullptr;
     }
 
@@ -130,9 +191,25 @@ FileWidget* ResourceManager::addSingleFile(const QString& filePath, QWidget* fil
 
     qDebug() << "Adding single file:" << filePath;
 
+    // Get the appropriate maps based on type
+    QMap<QString, FileWidget*>* fileMap = nullptr;
+    QSet<QString>* pathSet = nullptr;
+    if (type == FileType::WavForFeature) {
+        fileMap = &m_wavForFeatureFiles;
+        pathSet = &m_wavForFeaturePaths;
+    } else if (type == FileType::WavForSeparation) {
+        fileMap = &m_wavForSeparationFiles;
+        pathSet = &m_wavForSeparationPaths;
+    } else if (type == FileType::SoundFeature) {
+        fileMap = &m_soundFeatureFiles;
+        pathSet = &m_soundFeaturePaths;
+    }
+
+    if (!fileMap || !pathSet) return nullptr;
+
     FileWidget* fileWidget = new FileWidget(filePath, fileParent);
-    m_singleFileMap.insert(fi.absoluteFilePath(), fileWidget);
-    m_addedFilePaths.insert(fi.absoluteFilePath());
+    fileMap->insert(fi.absoluteFilePath(), fileWidget);
+    pathSet->insert(fi.absoluteFilePath());
     emitFileAdded(fi.absoluteFilePath(), type);
 
     return fileWidget;
@@ -141,42 +218,78 @@ FileWidget* ResourceManager::addSingleFile(const QString& filePath, QWidget* fil
 /**
  * @brief Removes a file from the resource manager.
  * @param filePath The path to the file to remove.
+ * @param type The file type.
  */
-void ResourceManager::removeFile(const QString& filePath)
+void ResourceManager::removeFile(const QString& filePath, FileType type)
 {
-    if (m_addedFilePaths.remove(filePath)) {
+    // Get the appropriate containers based on type
+    QSet<QString>* pathSet = nullptr;
+    QMap<QString, FileWidget*>* fileMap = nullptr;
+
+    if (type == FileType::WavForFeature) {
+        pathSet = &m_wavForFeaturePaths;
+        fileMap = &m_wavForFeatureFiles;
+    } else if (type == FileType::WavForSeparation) {
+        pathSet = &m_wavForSeparationPaths;
+        fileMap = &m_wavForSeparationFiles;
+    } else if (type == FileType::SoundFeature) {
+        pathSet = &m_soundFeaturePaths;
+        fileMap = &m_soundFeatureFiles;
+    }
+
+    if (!pathSet || !fileMap) return;
+
+    if (pathSet->remove(filePath)) {
         // Remove from single files if present
-        if (m_singleFileMap.contains(filePath)) {
-            FileWidget* fw = m_singleFileMap.take(filePath);
+        if (fileMap->contains(filePath)) {
+            FileWidget* fw = fileMap->take(filePath);
             fw->deleteLater();
         }
         // Note: For folder files, removal is handled by FolderWidget
-        emitFileRemoved(filePath, FileType::WavForFeature);
+        emitFileRemoved(filePath, type);
     }
 }
 
 /**
  * @brief Removes a folder from the resource manager.
  * @param folderPath The path to the folder to remove.
+ * @param type The file type.
  */
-void ResourceManager::removeFolder(const QString& folderPath)
+void ResourceManager::removeFolder(const QString& folderPath, FileType type)
 {
-    if (m_folderMap.contains(folderPath)) {
-        FolderWidget* fw = m_folderMap.take(folderPath);
+    // Get the appropriate containers based on type
+    QMap<QString, FolderWidget*>* folderMap = nullptr;
+    QSet<QString>* pathSet = nullptr;
+
+    if (type == FileType::WavForFeature) {
+        folderMap = &m_wavForFeatureFolders;
+        pathSet = &m_wavForFeaturePaths;
+    } else if (type == FileType::WavForSeparation) {
+        folderMap = &m_wavForSeparationFolders;
+        pathSet = &m_wavForSeparationPaths;
+    } else if (type == FileType::SoundFeature) {
+        folderMap = &m_soundFeatureFolders;
+        pathSet = &m_soundFeaturePaths;
+    }
+
+    if (!folderMap || !pathSet) return;
+
+    if (folderMap->contains(folderPath)) {
+        FolderWidget* fw = folderMap->take(folderPath);
         fw->deleteLater();
 
-        // Remove all files in the folder from addedFilePaths
+        // Remove all files in the folder from pathSet
         QSet<QString> toRemove;
-        for (const QString& filePath : m_addedFilePaths) {
+        for (const QString& filePath : *pathSet) {
             if (filePath.startsWith(folderPath + "/")) {
                 toRemove.insert(filePath);
             }
         }
         for (const QString& filePath : toRemove) {
-            m_addedFilePaths.remove(filePath);
-            emitFileRemoved(filePath, FileType::WavForFeature);
+            pathSet->remove(filePath);
+            emitFileRemoved(filePath, type);
         }
-        emitFolderRemoved(folderPath, FileType::WavForFeature);
+        emitFolderRemoved(folderPath, type);
     }
 }
 
@@ -240,7 +353,11 @@ bool ResourceManager::isFileLocked(const QString& filePath) const
 QSet<QString> ResourceManager::getAddedFiles(FileType type) const
 {
     if (type == FileType::WavForFeature) {
-        return m_addedFilePaths;
+        return m_wavForFeaturePaths;
+    } else if (type == FileType::WavForSeparation) {
+        return m_wavForSeparationPaths;
+    } else if (type == FileType::SoundFeature) {
+        return m_soundFeaturePaths;
     }
     return QSet<QString>();
 }
@@ -253,7 +370,11 @@ QSet<QString> ResourceManager::getAddedFiles(FileType type) const
 QMap<QString, FolderWidget*> ResourceManager::getFolders(FileType type) const
 {
     if (type == FileType::WavForFeature) {
-        return m_folderMap;
+        return m_wavForFeatureFolders;
+    } else if (type == FileType::WavForSeparation) {
+        return m_wavForSeparationFolders;
+    } else if (type == FileType::SoundFeature) {
+        return m_soundFeatureFolders;
     }
     return QMap<QString, FolderWidget*>();
 }
@@ -266,7 +387,11 @@ QMap<QString, FolderWidget*> ResourceManager::getFolders(FileType type) const
 QMap<QString, FileWidget*> ResourceManager::getSingleFiles(FileType type) const
 {
     if (type == FileType::WavForFeature) {
-        return m_singleFileMap;
+        return m_wavForFeatureFiles;
+    } else if (type == FileType::WavForSeparation) {
+        return m_wavForSeparationFiles;
+    } else if (type == FileType::SoundFeature) {
+        return m_soundFeatureFiles;
     }
     return QMap<QString, FileWidget*>();
 }
@@ -280,7 +405,11 @@ QMap<QString, FileWidget*> ResourceManager::getSingleFiles(FileType type) const
 bool ResourceManager::isDuplicate(const QString& path, FileType type) const
 {
     if (type == FileType::WavForFeature) {
-        return m_addedFilePaths.contains(path);
+        return m_wavForFeaturePaths.contains(path);
+    } else if (type == FileType::WavForSeparation) {
+        return m_wavForSeparationPaths.contains(path);
+    } else if (type == FileType::SoundFeature) {
+        return m_soundFeaturePaths.contains(path);
     }
     return false;
 }
@@ -333,6 +462,21 @@ void ResourceManager::emitFolderRemoved(const QString& folderPath, FileType type
 bool ResourceManager::loadModel(const QString& modelPath)
 {
     return m_htsatProcessor->loadModel(modelPath);
+}
+
+bool ResourceManager::loadZeroShotASPModel(const QString& modelPath)
+{
+    return m_zeroShotAspProcessor->loadModel(modelPath);
+}
+
+torch::Tensor ResourceManager::separateAudio(const torch::Tensor& waveform, const torch::Tensor& condition)
+{
+    if (!m_zeroShotAspProcessor->isModelLoaded()) {
+        qWarning() << "ZeroShotASP model not loaded.";
+        return torch::Tensor();
+    }
+    // Provide an output path for WAV file saving if needed, here empty to keep old behavior
+    return m_zeroShotAspProcessor->separateAudio(waveform, condition, QString());
 }
 
 /**
@@ -423,4 +567,244 @@ void ResourceManager::generateAudioFeatures(const QStringList& filePaths, const 
     file.close();
 
     qDebug() << "Averaged embedding saved to:" << finalOutputFileName;
+
+    emit featuresUpdated(); // Emit signal to notify features updated
+}
+
+/**
+ * @brief Automatically loads sound features from the output_features folder.
+ */
+void ResourceManager::autoLoadSoundFeatures()
+{
+    // This method can be used to automatically load features if needed
+    // For now, it's a placeholder
+    qDebug() << "autoLoadSoundFeatures called";
+}
+
+/**
+ * @brief Removes a sound feature by name.
+ * @param featureName The name of the feature to remove (without .txt extension).
+ */
+void ResourceManager::removeFeature(const QString& featureName)
+{
+    QString outputFolder = "output_features";
+    QDir dir(outputFolder);
+    if (!dir.exists()) {
+        qDebug() << "Output features folder does not exist:" << outputFolder;
+        return;
+    }
+
+    // Find the file that matches the feature name (may have timestamp)
+    QStringList featureFiles = dir.entryList(QStringList() << "*.txt", QDir::Files);
+    QString fileToDelete;
+    for (const QString& file : featureFiles) {
+        if (file.startsWith(featureName + "_") || file == featureName + ".txt") {
+            fileToDelete = dir.absoluteFilePath(file);
+            break;
+        }
+    }
+
+    if (fileToDelete.isEmpty()) {
+        qDebug() << "Feature file not found for:" << featureName;
+        return;
+    }
+
+    QFile file(fileToDelete);
+    if (file.remove()) {
+        qDebug() << "Deleted feature file:" << fileToDelete;
+        emit featuresUpdated(); // Notify that features have been updated
+    } else {
+        qDebug() << "Failed to delete feature file:" << fileToDelete;
+    }
+}
+
+/**
+ * @brief Splits an audio file into chunks and saves each chunk as a WAV file.
+ * @param audioPath Path to the input audio file.
+ * @return List of paths to the saved chunk WAV files.
+ */
+QStringList ResourceManager::splitAndSaveWavChunks(const QString& audioPath)
+{
+    QStringList tempFiles;
+    std::vector<float> audioData = readAndResampleAudio(audioPath);
+    if (audioData.empty()) {
+        return tempFiles;
+    }
+
+    const int64_t chunkSize = 320000;  // 10 seconds at 32kHz
+    QDir tempDir("temp_chunks");
+    if (!tempDir.exists()) {
+        tempDir.mkpath(".");
+    }
+
+    QFileInfo fi(audioPath);
+    QString baseName = fi.baseName();
+    int chunkIndex = 0;
+
+    for (size_t start = 0; start < audioData.size(); start += chunkSize) {
+        size_t end = std::min(start + chunkSize, audioData.size());
+        std::vector<float> chunk(audioData.begin() + start, audioData.begin() + end);
+
+        // Pad the last chunk with zeros to make it the same size
+        if (chunk.size() < chunkSize) {
+            chunk.resize(chunkSize, 0.0f);
+        }
+
+        // Convert to tensor and save as WAV
+        torch::Tensor tensor = torch::from_blob(chunk.data(), {chunkSize}, torch::kFloat32).clone();
+        QString tempFile = QString("temp_chunks/%1_chunk_%2.wav").arg(baseName).arg(chunkIndex++);
+
+        if (saveWav(tensor, tempFile, 32000)) {
+            tempFiles.append(tempFile);
+        }
+    }
+
+    return tempFiles;
+}
+
+/**
+ * @brief Processes an audio file with a feature and saves the separated audio.
+ * @param audioPath Path to the input audio file.
+ * @param featureName Name of the feature to use for separation.
+ * @return List of paths to the saved separated audio files (one per input file).
+ */
+QStringList ResourceManager::processAndSaveSeparatedChunks(const QString& audioPath, const QString& featureName)
+{
+    QStringList separatedFiles;
+
+    // Load ZeroShotASP model if not loaded
+    if (!m_zeroShotAspProcessor->isModelLoaded()) {
+        QString modelPath = "models/zero_shot_asp_separation_model.pt";
+        if (!loadZeroShotASPModel(modelPath)) {
+            qWarning() << "Failed to load ZeroShotASP model from:" << modelPath;
+            return separatedFiles;
+        }
+    }
+
+    // Find the feature file
+    QString outputFolder = "output_features";
+    QDir dir(outputFolder);
+    if (!dir.exists()) {
+        qWarning() << "Output features folder does not exist:" << outputFolder;
+        return separatedFiles;
+    }
+
+    QStringList featureFiles = dir.entryList(QStringList() << "*.txt", QDir::Files);
+    QString featureFile;
+    for (const QString& file : featureFiles) {
+        if (file.startsWith(featureName + "_") || file == featureName + ".txt") {
+            featureFile = dir.absoluteFilePath(file);
+            break;
+        }
+    }
+
+    if (featureFile.isEmpty()) {
+        qWarning() << "Feature file not found for:" << featureName;
+        return separatedFiles;
+    }
+
+    // Load the embedding
+    QFile file(featureFile);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        qWarning() << "Failed to open feature file:" << featureFile;
+        return separatedFiles;
+    }
+
+    QTextStream in(&file);
+    QString line = in.readLine();
+    QStringList parts = line.split(" ", Qt::SkipEmptyParts);
+    std::vector<float> embedding;
+    for (const QString& part : parts) {
+        embedding.push_back(part.toFloat());
+    }
+    file.close();
+
+    if (embedding.size() != 2048) {
+        qWarning() << "Invalid embedding size:" << embedding.size() << "expected 2048";
+        return separatedFiles;
+    }
+
+    // Read and resample audio to 32kHz mono
+    std::vector<float> audioData = readAndResampleAudio(audioPath);
+    if (audioData.empty()) {
+        return separatedFiles;
+    }
+
+    const int64_t chunkSize = 320000;  // 10 seconds at 32kHz
+    QFileInfo fi(audioPath);
+    QString baseName = fi.baseName();
+
+    // Collect separated chunks
+    std::vector<torch::Tensor> separatedChunks;
+
+    for (size_t start = 0; start < audioData.size(); start += chunkSize) {
+        size_t end = std::min(start + chunkSize, audioData.size());
+        std::vector<float> chunk(audioData.begin() + start, audioData.begin() + end);
+        size_t originalLength = chunk.size();
+
+        // Pad the chunk with zeros to make it chunkSize
+        if (chunk.size() < chunkSize) {
+            chunk.resize(chunkSize, 0.0f);
+        }
+
+        // Convert to tensor and add batch dimension
+        torch::Tensor waveform = torch::from_blob(chunk.data(), {1, chunkSize, 1}, torch::kFloat32).clone();
+        torch::Tensor condition = torch::from_blob(embedding.data(), {1, 2048}, torch::kFloat32).clone();
+
+        // Separate audio
+        torch::Tensor separated = separateAudio(waveform, condition);
+        if (separated.numel() == 0) {
+            qWarning() << "Separation failed for chunk starting at" << start;
+            continue;
+        }
+
+        // Trim to original length
+        torch::Tensor separatedTrimmed = separated.squeeze(0).squeeze(1).slice(0, 0, originalLength);
+        separatedChunks.push_back(separatedTrimmed);
+    }
+
+    if (separatedChunks.empty()) {
+        qWarning() << "No separated chunks generated for file:" << audioPath;
+        return separatedFiles;
+    }
+
+    // Combine all separated chunks into one tensor
+    torch::Tensor combinedSeparated = torch::cat(separatedChunks, 0);
+
+    // Create output directory
+    QDir separatedDir("separated_chunks");
+    if (!separatedDir.exists()) {
+        separatedDir.mkpath(".");
+    }
+
+    // Save combined separated audio
+    QString separatedFile = QString("separated_chunks/separated_%1.wav").arg(baseName);
+    if (saveWav(combinedSeparated, separatedFile, 32000)) {
+        separatedFiles.append(separatedFile);
+    }
+
+    return separatedFiles;
+}
+
+
+/**
+ * @brief Public wrapper for HTSATProcessor::readAndResampleAudio.
+ * @param audioPath Path to the audio file.
+ * @return Resampled audio data as vector of floats.
+ */
+std::vector<float> ResourceManager::readAndResampleAudio(const QString& audioPath)
+{
+    return m_htsatProcessor->readAndResampleAudio(audioPath);
+}
+
+/**
+ * @brief Public wrapper for ZeroShotASPFeatureExtractor::saveAsWav.
+ * @param waveform Tensor of shape (N,) with float32 samples.
+ * @param filePath Output file path.
+ * @param sampleRate Sample rate in Hz (default 32000).
+ * @return True if saving succeeded, false otherwise.
+ */
+bool ResourceManager::saveWav(const torch::Tensor& waveform, const QString& filePath, int sampleRate)
+{
+    return m_zeroShotAspProcessor->saveAsWav(waveform, filePath, sampleRate);
 }

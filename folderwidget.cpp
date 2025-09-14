@@ -4,6 +4,7 @@
 #include <QSignalBlocker>
 #include <QEvent>
 #include <QPushButton>
+#include <QToolButton>
 
 /**
  * @brief Constructs the FolderWidget.
@@ -72,14 +73,29 @@ void FolderWidget::setupUI()
     mainLayout->addWidget(folderPathLabel);
 
     // Interaction logic for folder checkbox
-    connect(folderCheckBox, &QCheckBox::clicked, this, [this](bool checked) {
-        QSignalBlocker block(folderCheckBox);
-        folderCheckBox->setCheckState(checked ? Qt::Checked : Qt::Unchecked);
-
-        for (WideCheckBox* cb : filesCheckBoxes) {
-            QSignalBlocker blockChild(cb);
-            cb->setChecked(checked);
+    connect(folderCheckBox, QOverload<int>::of(&QCheckBox::stateChanged), this, [this](int state) {
+        if (m_updatingCheckStates) return;
+        m_updatingCheckStates = true;
+        if (state == Qt::Checked) {
+            for (WideCheckBox* cb : filesCheckBoxes) {
+                QSignalBlocker block(cb);
+                cb->setChecked(true);
+            }
+        } else if (state == Qt::Unchecked) {
+            for (WideCheckBox* cb : filesCheckBoxes) {
+                QSignalBlocker block(cb);
+                cb->setChecked(false);
+            }
+        } else if (state == Qt::PartiallyChecked) {
+            // When partially checked, clicking should select all
+            QSignalBlocker block(folderCheckBox);
+            folderCheckBox->setCheckState(Qt::Checked);
+            for (WideCheckBox* cb : filesCheckBoxes) {
+                QSignalBlocker block(cb);
+                cb->setChecked(true);
+            }
         }
+        m_updatingCheckStates = false;
     });
 
     for (WideCheckBox* cb : filesCheckBoxes) {
@@ -136,16 +152,25 @@ void FolderWidget::addFilesInternal(const QStringList& files)
         arrowLabel->setFixedWidth(12);
 
         WideCheckBox* cb = new WideCheckBox(f, fileItemWidget);
-        cb->setChecked(true);
+        {
+            QSignalBlocker block(cb);
+            cb->setChecked(true);
+        }
         cb->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
         cb->setMinimumHeight(28);
         cb->setStyleSheet("QCheckBox { padding: 6px; }");
+
+        QToolButton* playBtn = new QToolButton(fileItemWidget);
+        playBtn->setText("▶");
+        playBtn->setToolTip("播放此檔案");
+        playBtn->setFixedSize(20, 20);
 
         QPushButton* removeBtn = new QPushButton("✕", fileItemWidget);
         removeBtn->setFixedSize(20, 20);
 
         fileLayout->addWidget(arrowLabel);
         fileLayout->addWidget(cb);
+        fileLayout->addWidget(playBtn);
         fileLayout->addWidget(removeBtn);
         fileItemWidget->setLayout(fileLayout);
 
@@ -164,6 +189,10 @@ void FolderWidget::addFilesInternal(const QStringList& files)
                 emit folderRemoved(m_folderPath);
             }
         });
+
+        connect(playBtn, &QToolButton::clicked, this, [this, f]() {
+            emit playRequested(QDir(m_folderPath).absoluteFilePath(f));
+        });
     }
     refreshFolderCheckState();
 }
@@ -176,6 +205,8 @@ void FolderWidget::addFilesInternal(const QStringList& files)
  */
 void FolderWidget::refreshFolderCheckState()
 {
+    if (m_updatingCheckStates) return;
+    m_updatingCheckStates = true;
     int checkedCount = 0;
     const int total = filesCheckBoxes.size();
     for (WideCheckBox* cb : filesCheckBoxes) if (cb->checkState() == Qt::Checked) ++checkedCount;
@@ -184,6 +215,7 @@ void FolderWidget::refreshFolderCheckState()
     if (checkedCount == 0) folderCheckBox->setCheckState(Qt::Unchecked);
     else if (checkedCount == total) folderCheckBox->setCheckState(Qt::Checked);
     else folderCheckBox->setCheckState(Qt::PartiallyChecked);
+    m_updatingCheckStates = false;
 }
 
 /**

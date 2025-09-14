@@ -12,6 +12,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets LinguistTools)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets LinguistTools)
 
+# Try to find Multimedia component
+find_package(Qt${QT_VERSION_MAJOR} QUIET COMPONENTS Multimedia)
+if(Qt${QT_VERSION_MAJOR}Multimedia_FOUND)
+    set(HAS_MULTIMEDIA TRUE)
+else()
+    set(HAS_MULTIMEDIA FALSE)
+    message(WARNING "Qt Multimedia not found. Audio playback will not be available.")
+endif()
+
 ### 🔹 加入 LibTorch
 # 修改這裡成你的 libtorch 解壓路徑
 set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};$ENV{HOME}/libtorch")
@@ -31,11 +40,13 @@ set(PROJECT_SOURCES
         mainwindow.ui
         ${TS_FILES}
         addsoundfeaturewidget.h addsoundfeaturewidget.cpp
+        usefeaturewidget.h usefeaturewidget.cpp
         fileutils.h fileutils.cpp
         filewidget.h filewidget.cpp
-        widecheckbox.h
+        widecheckbox.h widecheckbox.cpp
         folderwidget.h folderwidget.cpp
         htsatprocessor.h htsatprocessor.cpp
+        zero_shot_asp_feature_extractor.h zero_shot_asp_feature_extractor.cpp
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
@@ -45,6 +56,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         .gitignore
         resourcemanager.h resourcemanager.cpp
         REVIEW_SUMMARY.md
+        audioplayer.h audioplayer.cpp
     )
     qt_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TS_FILES})
 else()
@@ -69,6 +81,11 @@ target_link_libraries(AudioSeparationTool
     ${SNDFILE_LIBRARIES}
     ${SAMPLERATE_LIBRARIES}
 )
+
+if(HAS_MULTIMEDIA)
+    target_link_libraries(AudioSeparationTool PRIVATE Qt${QT_VERSION_MAJOR}::Multimedia)
+    target_compile_definitions(AudioSeparationTool PRIVATE HAS_MULTIMEDIA)
+endif()
 
 # 避免 LibTorch 一些標準差異警告
 set_property(TARGET AudioSeparationTool PROPERTY CXX_STANDARD 17)
