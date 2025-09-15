@@ -9,10 +9,6 @@
 #include <QLineEdit>
 #include <QMap>
 #include <QSet>
-#include <QDragEnterEvent>
-#include <QDropEvent>
-#include "folderwidget.h"
-#include "filewidget.h"
 #include "filemanagerwidget.h"
 
 /**
@@ -55,54 +51,15 @@ public:
      */
     QString getOutputFileName() const;
 
-protected:
-    /**
-     * @brief Handles drag enter events for drag-and-drop functionality.
-     * @param event The drag enter event.
-     */
-    void dragEnterEvent(QDragEnterEvent *event) override;
-
-    /**
-     * @brief Handles drop events for drag-and-drop functionality.
-     * @param event The drop event.
-     */
-    void dropEvent(QDropEvent *event) override;
-
 private:
-    // UI Layout Components
-    QVBoxLayout* layout;         ///< Main vertical layout
-    QLabel* infoLabel;           ///< Information label for user instructions
-    QLabel* statusLabel;         ///< Status label for error messages and feedback
-    QScrollArea* scrollArea;     ///< Scrollable area for content
-
-    // Folder Management
-    QWidget* folderContainer;    ///< Container for folder widgets
-    QVBoxLayout* folderLayout;   ///< Layout for folder widgets
-    QMap<QString, FolderWidget*> folderMap; ///< Map of folder paths to FolderWidget instances
-
-    // Single File Management
-    QWidget* singleFileContainer; ///< Container for single file widgets
-    QVBoxLayout* singleFileLayout; ///< Layout for single file widgets
-    QMap<QString, FileWidget*> singleFileMap; ///< Map of file paths to FileWidget instances
-
-    // Buttons
-    QPushButton* selectFolderBtn; ///< Button to select a folder
-    QPushButton* selectFilesBtn; ///< Button to select WAV files
-    QPushButton* createFeatureBtn; ///< Button to create the feature
-
     // File Name Input
     QLabel* fileNameLabel;       ///< Label for file name input
     QLineEdit* fileNameInput;     ///< Input field for generated file name
+    QPushButton* createFeatureBtn; ///< Button to create the feature
 
     // Private Methods
-    void setupUI();                           ///< Sets up the user interface
     void setupFeatureInputUI();               ///< Sets up the feature input UI components
     void setupFeatureButtonConnections();     ///< Sets up the connections for the feature creation button
-    void addFolder(const QString& folderPath) override; ///< Adds a folder and its WAV files
-    void addSingleFile(const QString& filePath) override; ///< Adds a single WAV file
-
-signals:
-    void playRequested(const QString& filePath);
 };
 
 #endif // ADDSOUNDFEATUREWIDGET_H

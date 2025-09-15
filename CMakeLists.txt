@@ -50,6 +50,8 @@ set(PROJECT_SOURCES
         folderwidget.h folderwidget.cpp
         htsatprocessor.h htsatprocessor.cpp
         zero_shot_asp_feature_extractor.h zero_shot_asp_feature_extractor.cpp
+        htsatworker.h htsatworker.cpp
+        separationworker.h separationworker.cpp
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)

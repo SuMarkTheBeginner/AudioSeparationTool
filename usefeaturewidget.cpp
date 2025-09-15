@@ -16,10 +16,8 @@ UseFeatureWidget::UseFeatureWidget(QWidget *parent)
 
 void UseFeatureWidget::setupUI()
 {
-    mainLayout = new QVBoxLayout(this);
-
+    setupCommonUI(Constants::SELECT_WAV_FILES_TEXT, "Select Folder", "Select WAV Files");
     setupFeatureSelectionUI();
-    setupFileManagementUI();
     setupProcessingUI();
     setupConnections();
 }
@@ -31,6 +29,13 @@ void UseFeatureWidget::setupUI()
  */
 void UseFeatureWidget::setupFeatureSelectionUI()
 {
+    // Access the main layout from the base class
+    QVBoxLayout* mainLayout = qobject_cast<QVBoxLayout*>(this->QWidget::layout());
+    if (!mainLayout) {
+        qDebug() << "Error: Main layout is not a QVBoxLayout";
+        return;
+    }
+
     featureLabel = new QLabel(Constants::SELECT_FEATURE_LABEL, this);
     mainLayout->addWidget(featureLabel);
 
@@ -45,36 +50,7 @@ void UseFeatureWidget::setupFeatureSelectionUI()
     mainLayout->addLayout(featureLayout);
 }
 
-/**
- * @brief Sets up the file management UI components.
- *
- * Creates the file label, status label, add buttons, and scroll area.
- */
-void UseFeatureWidget::setupFileManagementUI()
-{
-    fileLabel = new QLabel(Constants::SELECT_WAV_FILES_TEXT, this);
-    mainLayout->addWidget(fileLabel);
 
-    statusLabel = new QLabel("", this);
-    statusLabel->setStyleSheet("color: red; font-weight: bold;");
-    statusLabel->setWordWrap(true);
-    mainLayout->addWidget(statusLabel);
-
-    // Add buttons to add files and folders
-    QHBoxLayout* addButtonsLayout = new QHBoxLayout();
-    QPushButton* addFolderButton = new QPushButton("Add Folder", this);
-    QPushButton* addFileButton = new QPushButton("Add File", this);
-    addButtonsLayout->addWidget(addFolderButton);
-    addButtonsLayout->addWidget(addFileButton);
-    mainLayout->addLayout(addButtonsLayout);
-
-    fileScrollArea = new QScrollArea(this);
-    fileScrollArea->setWidgetResizable(true);
-    fileContainer = new QWidget(this);
-    fileLayout = new QVBoxLayout(fileContainer);
-    fileScrollArea->setWidget(fileContainer);
-    mainLayout->addWidget(fileScrollArea, 1);
-}
 
 /**
  * @brief Sets up the processing UI components.
@@ -83,6 +59,13 @@ void UseFeatureWidget::setupFileManagementUI()
  */
 void UseFeatureWidget::setupProcessingUI()
 {
+    // Access the main layout from the base class
+    QVBoxLayout* mainLayout = qobject_cast<QVBoxLayout*>(this->QWidget::layout());
+    if (!mainLayout) {
+        qDebug() << "Error: Main layout is not a QVBoxLayout";
+        return;
+    }
+
     processButton = new QPushButton(Constants::PROCESS_BUTTON, this);
     mainLayout->addWidget(processButton);
 
@@ -101,39 +84,16 @@ void UseFeatureWidget::setupProcessingUI()
 void UseFeatureWidget::setupConnections()
 {
     connect(processButton, &QPushButton::clicked, this, &UseFeatureWidget::onProcessClicked);
-    connect(this, &UseFeatureWidget::playRequested, this, &UseFeatureWidget::onPlayResult);
-
-    // Find the add buttons from the layout
-    QHBoxLayout* addButtonsLayout = qobject_cast<QHBoxLayout*>(mainLayout->itemAt(3)->layout());
-    if (addButtonsLayout) {
-        QPushButton* addFolderButton = qobject_cast<QPushButton*>(addButtonsLayout->itemAt(0)->widget());
-        QPushButton* addFileButton = qobject_cast<QPushButton*>(addButtonsLayout->itemAt(1)->widget());
-
-        if (addFolderButton) {
-            connect(addFolderButton, &QPushButton::clicked, this, [this]() {
-                QString folderPath = QFileDialog::getExistingDirectory(this, "Select Folder to Add");
-                if (!folderPath.isEmpty()) {
-                    addFolder(folderPath);
-                }
-            });
-        }
-
-        if (addFileButton) {
-            connect(addFileButton, &QPushButton::clicked, this, [this]() {
-                QStringList files = QFileDialog::getOpenFileNames(this, "Select WAV Files to Add", QString(), "WAV Files (*.wav)");
-                for (const QString& file : files) {
-                    addSingleFile(file);
-                }
-            });
-        }
-    }
 
     // Find the delete button from the feature layout
-    QHBoxLayout* featureLayout = qobject_cast<QHBoxLayout*>(mainLayout->itemAt(1)->layout());
-    if (featureLayout) {
-        QPushButton* deleteButton = qobject_cast<QPushButton*>(featureLayout->itemAt(1)->widget());
-        if (deleteButton) {
-            connect(deleteButton, &QPushButton::clicked, this, &UseFeatureWidget::onDeleteClicked);
+    QVBoxLayout* mainLayout = qobject_cast<QVBoxLayout*>(this->QWidget::layout());
+    if (mainLayout) {
+        QHBoxLayout* featureLayout = qobject_cast<QHBoxLayout*>(mainLayout->itemAt(1)->layout());
+        if (featureLayout) {
+            QPushButton* deleteButton = qobject_cast<QPushButton*>(featureLayout->itemAt(1)->widget());
+            if (deleteButton) {
+                connect(deleteButton, &QPushButton::clicked, this, &UseFeatureWidget::onDeleteClicked);
+            }
         }
     }
 }
@@ -182,33 +142,33 @@ void UseFeatureWidget::addFolder(const QString& folderPath)
     statusLabel->setText(""); // Clear previous errors
 
     // Remove single files that are in this folder
-    QMap<QString, FileWidget*> singleFiles = rm->getSingleFiles(ResourceManager::FileType::WavForSeparation);
+    QMap<QString, FileWidget*> singleFiles = rm->getSingleFiles(fileType());
     for (const QString& filePath : singleFiles.keys()) {
         if (filePath.startsWith(folderPath + "/")) {
-            rm->removeFile(filePath);
+            rm->removeFile(filePath, fileType());
             FileWidget* fw = singleFiles[filePath];
-            fileLayout->removeWidget(fw);
+            singleFileLayout->removeWidget(fw);
             // Widget is deleted in ResourceManager
         }
     }
 
     // Delegate to ResourceManager
-    FolderWidget* folderWidget = rm->addFolder(folderPath, fileContainer, ResourceManager::FileType::WavForSeparation);
+    FolderWidget* folderWidget = rm->addFolder(folderPath, folderContainer, fileType());
 
     if (folderWidget) {
         // Add to layout if newly created
-        if (fileLayout->indexOf(folderWidget) == -1) {
-            fileLayout->addWidget(folderWidget);
+        if (folderLayout->indexOf(folderWidget) == -1) {
+            folderLayout->addWidget(folderWidget);
         }
 
         // Handle removal connections
         connect(folderWidget, &FolderWidget::fileRemoved, this, [this, rm](const QString& path){
-            rm->removeFile(path);
+            rm->removeFile(path, fileType());
         });
 
         connect(folderWidget, &FolderWidget::folderRemoved, this, [this, rm, folderWidget](const QString& folderPath){
-            rm->removeFolder(folderPath);
-            fileLayout->removeWidget(folderWidget);
+            rm->removeFolder(folderPath, fileType());
+            folderLayout->removeWidget(folderWidget);
             // Widget is deleted in ResourceManager
         });
 
@@ -241,13 +201,13 @@ void UseFeatureWidget::addSingleFile(const QString& filePath)
 
     statusLabel->setText(""); // Clear previous errors
 
-    FileWidget* fileWidget = rm->addSingleFile(filePath, fileContainer, ResourceManager::FileType::WavForSeparation);
+    FileWidget* fileWidget = rm->addSingleFile(filePath, singleFileContainer, fileType());
     if (fileWidget) {
-        fileLayout->addWidget(fileWidget);
+        singleFileLayout->addWidget(fileWidget);
 
         connect(fileWidget, &FileWidget::fileRemoved,
                 this, [this, rm](const QString& path){
-                    rm->removeFile(path);
+                    rm->removeFile(path, fileType());
                 });
 
         connect(fileWidget, &FileWidget::playRequested,
@@ -272,7 +232,7 @@ void UseFeatureWidget::onProcessClicked()
     ResourceManager* rm = ResourceManager::instance();
 
     // From folders
-    QMap<QString, FolderWidget*> folders = rm->getFolders(ResourceManager::FileType::WavForSeparation);
+    QMap<QString, FolderWidget*> folders = rm->getFolders(fileType());
     for (FolderWidget* fw : folders.values()) {
         QStringList selected = fw->getSelectedFiles();
         for (const QString& path : selected) {
@@ -281,7 +241,7 @@ void UseFeatureWidget::onProcessClicked()
     }
 
     // From single files
-    QMap<QString, FileWidget*> singles = rm->getSingleFiles(ResourceManager::FileType::WavForSeparation);
+    QMap<QString, FileWidget*> singles = rm->getSingleFiles(fileType());
     for (FileWidget* fw : singles.values()) {
         if (fw->checkBox()->isChecked()) {
             filesToProcess.append(fw->filePath());
@@ -296,23 +256,43 @@ void UseFeatureWidget::onProcessClicked()
     // Clear previous results
     resultList->clear();
 
-    // Process each file: separate and save chunks using the selected feature
-for (const QString& file : filesToProcess) {
-    QStringList separatedFiles = rm->processAndSaveSeparatedChunks(file, selectedFeature);
-    for (const QString& separatedFile : separatedFiles) {
-        resultList->addItem(separatedFile);
-    }
+    // Disable process button during processing
+    processButton->setEnabled(false);
+
+    // Connect signals to update UI
+    connect(rm, &ResourceManager::processingProgress, this, &UseFeatureWidget::onProcessingProgress);
+    connect(rm, &ResourceManager::processingFinished, this, &UseFeatureWidget::onProcessingFinished);
+
+    // Start async processing
+    rm->startProcessAndSaveSeparatedChunks(filesToProcess.first(), selectedFeature);
 }
 
-}
-
-
-
-
-
-void UseFeatureWidget::onPlayResult(const QString& filePath)
+void UseFeatureWidget::onProcessingProgress(int value)
 {
-    emit playRequested(filePath);
+    // Update UI with progress value, e.g., update a progress bar or label
+    resultLabel->setText(QString("Processing: %1%").arg(value));
+}
+
+void UseFeatureWidget::onProcessingFinished(const QStringList& results)
+{
+    ResourceManager* rm = ResourceManager::instance();
+
+    // Add results to the list
+    for (const QString& result : results) {
+        resultList->addItem(result);
+    }
+
+    // Re-enable process button
+    processButton->setEnabled(true);
+
+    // Refresh feature list or results
+    loadFeatures();
+
+    // Disconnect signals to avoid duplicate connections
+    disconnect(rm, &ResourceManager::processingProgress, this, &UseFeatureWidget::onProcessingProgress);
+    disconnect(rm, &ResourceManager::processingFinished, this, &UseFeatureWidget::onProcessingFinished);
+
+    resultLabel->setText("Processing finished.");
 }
 
 void UseFeatureWidget::onDeleteClicked()

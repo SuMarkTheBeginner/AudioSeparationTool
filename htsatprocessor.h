@@ -10,6 +10,7 @@
 #define slots
 #endif
 #include <vector>
+#include <sndfile.h>
 
 /**
  * @brief Class for handling HTSAT (Hierarchical Token-Semantic Audio Transformer) model processing.
@@ -78,6 +79,37 @@ private:
      * @return The prepared tensor.
      */
     torch::Tensor prepareTensor(const std::vector<float>& audioData);
+
+    /**
+     * @brief Validates the audio file format.
+     * @param audioPath Path to the audio file.
+     * @return True if the format is valid, false otherwise.
+     */
+    bool validateAudioFormat(const QString& audioPath);
+
+    /**
+     * @brief Reads audio data from file.
+     * @param audioPath Path to the audio file.
+     * @param sfinfo Output parameter for audio file info.
+     * @return Audio data as vector of floats.
+     */
+    std::vector<float> readAudioFile(const QString& audioPath, SF_INFO& sfinfo);
+
+    /**
+     * @brief Converts multi-channel audio data to mono by averaging channels.
+     * @param inputData Multi-channel audio data.
+     * @param channels Number of channels.
+     * @return Mono audio data.
+     */
+    std::vector<float> convertToMono(const std::vector<float>& inputData, int channels);
+
+    /**
+     * @brief Resamples audio data to 32kHz if needed.
+     * @param inputData Input audio data.
+     * @param inputSampleRate Input sample rate.
+     * @return Resampled audio data.
+     */
+    std::vector<float> resampleTo32kHz(const std::vector<float>& inputData, int inputSampleRate);
 };
 
 #endif // HTSATPROCESSOR_H

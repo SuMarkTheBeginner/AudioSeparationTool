@@ -11,6 +11,14 @@
 #include <vector>
 #include <QDateTime>
 #include <QCoreApplication>
+#include <QThread>
+#include "htsatworker.h"
+#include "separationworker.h"
+
+static QThread* htsatThread = nullptr;
+static HTSATWorker* htsatWorker = nullptr;
+static QThread* separationThread = nullptr;
+static SeparationWorker* separationWorker = nullptr;
 
 // Singleton instance
 ResourceManager* ResourceManager::m_instance = nullptr;
@@ -41,6 +49,46 @@ ResourceManager::ResourceManager(QObject* parent)
     m_fileTypeData[FileType::WavForFeature] = FileTypeData();
     m_fileTypeData[FileType::SoundFeature] = FileTypeData();
     m_fileTypeData[FileType::WavForSeparation] = FileTypeData();
+
+    m_isProcessing = false;
+
+    // Setup HTSAT worker thread
+    htsatThread = new QThread(this);
+    htsatWorker = new HTSATWorker();
+    htsatWorker->moveToThread(htsatThread);
+
+    connect(htsatThread, &QThread::finished, htsatWorker, &QObject::deleteLater);
+    connect(this, &ResourceManager::startHTSATProcessing, htsatWorker, &HTSATWorker::generateFeatures);
+    connect(htsatWorker, &HTSATWorker::progressUpdated, this, &ResourceManager::processingProgress);
+    connect(htsatWorker, &HTSATWorker::finished, this, [this](const QString& resultFile){
+        m_isProcessing = false;
+        emit processingFinished(QStringList() << resultFile);
+    });
+    connect(htsatWorker, &HTSATWorker::error, this, [this](const QString& error){
+        m_isProcessing = false;
+        emit processingError(error);
+    });
+
+    htsatThread->start();
+
+    // Setup separation worker thread
+    separationThread = new QThread(this);
+    separationWorker = new SeparationWorker();
+    separationWorker->moveToThread(separationThread);
+
+    connect(separationThread, &QThread::finished, separationWorker, &QObject::deleteLater);
+    connect(this, &ResourceManager::startSeparationProcessing, separationWorker, &SeparationWorker::processFile);
+    connect(separationWorker, &SeparationWorker::progressUpdated, this, &ResourceManager::processingProgress);
+    connect(separationWorker, &SeparationWorker::finished, this, [this](const QStringList& results){
+        m_isProcessing = false;
+        emit processingFinished(results);
+    });
+    connect(separationWorker, &SeparationWorker::error, this, [this](const QString& error){
+        m_isProcessing = false;
+        emit processingError(error);
+    });
+
+    separationThread->start();
 }
 
 /**
@@ -48,6 +96,12 @@ ResourceManager::ResourceManager(QObject* parent)
  */
 ResourceManager::~ResourceManager()
 {
+    // Unlock all locked files before cleanup
+    for (const QString& filePath : m_lockedFiles) {
+        unlockFile(filePath);
+    }
+    m_lockedFiles.clear();
+
     // Cleanup widgets for all file types
     for (auto it = m_fileTypeData.begin(); it != m_fileTypeData.end(); ++it) {
         FileTypeData& data = it.value();
@@ -61,6 +115,20 @@ ResourceManager::~ResourceManager()
         data.files.clear();
     }
     m_fileTypeData.clear();
+
+    if (htsatThread) {
+        htsatThread->quit();
+        htsatThread->wait();
+        htsatThread = nullptr;
+        htsatWorker = nullptr;
+    }
+
+    if (separationThread) {
+        separationThread->quit();
+        separationThread->wait();
+        separationThread = nullptr;
+        separationWorker = nullptr;
+    }
 }
 
 /**
@@ -495,6 +563,19 @@ void ResourceManager::generateAudioFeatures(const QStringList& filePaths, const 
 }
 
 /**
+ * @brief Starts asynchronous generation of audio features.
+ * @param filePaths List of audio file paths.
+ * @param outputFileName Path to the output file.
+ */
+void ResourceManager::startGenerateAudioFeatures(const QStringList& filePaths, const QString& outputFileName)
+{
+    if (m_isProcessing) return;
+    m_isProcessing = true;
+    emit processingStarted();
+    emit startHTSATProcessing(filePaths, outputFileName);
+}
+
+/**
  * @brief Automatically loads sound features from the output_features folder.
  */
 void ResourceManager::autoLoadSoundFeatures()
@@ -709,6 +790,18 @@ QStringList ResourceManager::processAndSaveSeparatedChunks(const QString& audioP
     return separatedFiles;
 }
 
+/**
+ * @brief Starts asynchronous processing of audio file with feature and saves separated chunks.
+ * @param audioPath Path to the input audio file.
+ * @param featureName Name of the feature to use for separation.
+ */
+void ResourceManager::startProcessAndSaveSeparatedChunks(const QString& audioPath, const QString& featureName)
+{
+    if (m_isProcessing) return;
+    m_isProcessing = true;
+    emit processingStarted();
+    emit startSeparationProcessing(audioPath, featureName);
+}
 
 /**
  * @brief Public wrapper for HTSATProcessor::readAndResampleAudio.

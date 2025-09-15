@@ -44,9 +44,6 @@ void FileManagerWidget::setupCommonUI(const QString& instructionText, const QStr
     QVBoxLayout* mainLayout = new QVBoxLayout(mainContainer);
 
     // Folder section
-    QLabel* folderLabel = new QLabel("Folders:", mainContainer);
-    mainLayout->addWidget(folderLabel);
-
     folderContainer = new QWidget(mainContainer);
     folderLayout = new QVBoxLayout(folderContainer);
     folderLayout->setAlignment(Qt::AlignTop);
@@ -56,9 +53,6 @@ void FileManagerWidget::setupCommonUI(const QString& instructionText, const QStr
     mainLayout->addWidget(folderContainer);
 
     // Single file section
-    QLabel* singleFileLabel = new QLabel("Single Files:", mainContainer);
-    mainLayout->addWidget(singleFileLabel);
-
     singleFileContainer = new QWidget(mainContainer);
     singleFileLayout = new QVBoxLayout(singleFileContainer);
     singleFileLayout->setAlignment(Qt::AlignTop);
@@ -161,7 +155,7 @@ void FileManagerWidget::addFolder(const QString& folderPath)
             rm->removeFile(filePath, m_fileType);
             FileWidget* fw = singleFiles[filePath];
             singleFileLayout->removeWidget(fw);
-            // Widget is deleted in ResourceManager
+            fw->deleteLater();
         }
     }
 
@@ -182,7 +176,7 @@ void FileManagerWidget::addFolder(const QString& folderPath)
         connect(folderWidget, &FolderWidget::folderRemoved, this, [this, rm, folderWidget](const QString& folderPath){
             rm->removeFolder(folderPath, m_fileType);
             folderLayout->removeWidget(folderWidget);
-            // Widget is deleted in ResourceManager
+            folderWidget->deleteLater();
         });
 
         connect(folderWidget, &FolderWidget::playRequested, this, [this](const QString& path){

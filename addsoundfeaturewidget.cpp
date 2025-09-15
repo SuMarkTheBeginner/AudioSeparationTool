@@ -1,11 +1,8 @@
 #include "addsoundfeaturewidget.h"
 #include <QFileDialog>
-#include <QUrl>
 #include <QFileInfo>
 #include <QDir>
 #include <algorithm>
-#include <QDragEnterEvent>
-#include <QMimeData>
 
 #include "resourcemanager.h"
 #include "constants.h"
@@ -26,17 +23,7 @@ AddSoundFeatureWidget::AddSoundFeatureWidget(QWidget *parent)
     setupFeatureButtonConnections();
 }
 
-/**
- * @brief Sets up the user interface components.
- *
- * Creates the main layout, info label, scrollable area with folder and single file containers,
- * and buttons for selecting folders and creating features. Connects the select folder button
- * to open a directory dialog.
- */
-void AddSoundFeatureWidget::setupUI()
-{
-    // Removed because setupCommonUI is called in constructor now
-}
+
 
 /**
  * @brief Sets up the feature input UI components.
@@ -106,151 +93,13 @@ void AddSoundFeatureWidget::setupFeatureButtonConnections()
 
 
 
-/**
- * @brief Adds a folder and its WAV files to the interface.
- *
- * Delegates to ResourceManager to add the folder and handles UI updates.
- *
- * @param folderPath The path to the folder to add.
- */
-void AddSoundFeatureWidget::addFolder(const QString& folderPath)
-{
-    ResourceManager* rm = ResourceManager::instance();
-
-    // Check if folder exists and has WAV files (for status message)
-    QDir dir(folderPath);
-    if (!dir.exists()) {
-        statusLabel->setText(Constants::FOLDER_NOT_EXIST.arg(folderPath));
-        qDebug() << "Folder does not exist:" << folderPath;
-        return;
-    }
-
-    QStringList wavFiles = dir.entryList(QStringList() << "*.wav", QDir::Files);
-    if (wavFiles.isEmpty()) {
-        statusLabel->setText(Constants::NO_WAV_FILES_IN_FOLDER.arg(folderPath));
-        qDebug() << "No WAV files found in folder:" << folderPath;
-        return;
-    }
-
-    statusLabel->setText(""); // Clear previous errors
-
-    // Remove single files that are in this folder
-    QMap<QString, FileWidget*> singleFiles = rm->getSingleFiles();
-    for (const QString& filePath : singleFiles.keys()) {
-        if (filePath.startsWith(folderPath + "/")) {
-            rm->removeFile(filePath);
-            FileWidget* fw = singleFiles[filePath];
-            singleFileLayout->removeWidget(fw);
-            // Widget is deleted in ResourceManager
-        }
-    }
-
-    // Delegate to ResourceManager
-    FolderWidget* folderWidget = rm->addFolder(folderPath, folderContainer);
-
-    if (folderWidget) {
-        // Add to layout if newly created
-        if (folderLayout->indexOf(folderWidget) == -1) { // If not already in layout
-            folderLayout->addWidget(folderWidget);
-        }
-
-        // Handle removal connections
-        connect(folderWidget, &FolderWidget::fileRemoved, this, [this, rm](const QString& path){
-            rm->removeFile(path);
-        });
-
-        connect(folderWidget, &FolderWidget::folderRemoved, this, [this, rm, folderWidget](const QString& folderPath){
-            rm->removeFolder(folderPath);
-            folderLayout->removeWidget(folderWidget);
-            // Widget is deleted in ResourceManager
-        });
-
-        connect(folderWidget, &FolderWidget::playRequested, this, [this](const QString& path){
-            emit playRequested(path);
-        });
-    }
-}
 
 
-/**
- * @brief Adds a single WAV file to the interface.
- *
- * Delegates to ResourceManager to add the file and handles UI updates.
- *
- * @param filePath The path to the WAV file to add.
- */
-void AddSoundFeatureWidget::addSingleFile(const QString& filePath)
-{
-    ResourceManager* rm = ResourceManager::instance();
 
-    QFileInfo fi(filePath);
-    if (!fi.exists()) {
-        statusLabel->setText(Constants::FILE_NOT_EXIST.arg(filePath));
-        qDebug() << "File does not exist:" << filePath;
-        return;
-    }
-    if (!fi.isReadable()) {
-        statusLabel->setText(Constants::FILE_NOT_READABLE.arg(filePath));
-        qDebug() << "File is not readable:" << filePath;
-        return;
-    }
-    if (fi.suffix().toLower() != "wav") {
-        statusLabel->setText(Constants::FILE_NOT_WAV.arg(filePath));
-        qDebug() << "File is not a WAV file:" << filePath;
-        return;
-    }
 
-    statusLabel->setText(""); // Clear previous errors
 
-    FileWidget* fileWidget = rm->addSingleFile(filePath, singleFileContainer);
-    if (fileWidget) {
-        singleFileLayout->addWidget(fileWidget);
 
-        connect(fileWidget, &FileWidget::fileRemoved,
-                this, [this, rm](const QString& path){
-                    rm->removeFile(path);
-                });
 
-        connect(fileWidget, &FileWidget::playRequested,
-                this, [this](const QString& path){
-                    // Emit to MainWindow
-                    emit playRequested(path);
-                });
-    }
-}
-
-/**
- * @brief Handles drag enter events for drag-and-drop functionality.
- *
- * Accepts the drag event if it contains URLs (file paths), otherwise ignores it.
- *
- * @param event The drag enter event.
- */
-void AddSoundFeatureWidget::dragEnterEvent(QDragEnterEvent* event)
-{
-    if (event->mimeData()->hasUrls()) event->acceptProposedAction();
-    else event->ignore();
-}
-
-/**
- * @brief Handles drop events for drag-and-drop functionality.
- *
- * Processes the dropped URLs, determines if each is a directory or WAV file,
- * and adds folders or single files accordingly.
- *
- * @param event The drop event.
- */
-void AddSoundFeatureWidget::dropEvent(QDropEvent* event)
-{
-    QList<QUrl> urls = event->mimeData()->urls();
-    for (const QUrl& url : urls) {
-        QString path = url.toLocalFile();
-        QFileInfo fi(path);
-
-        if (fi.isDir()) addFolder(path);
-        else if (fi.isFile() && fi.suffix().toLower() == "wav") addSingleFile(path);
-    }
-}
 
 /**
  * @brief Sorts all folders and single files based on the specified type.
@@ -264,7 +113,7 @@ void AddSoundFeatureWidget::sortAll(SortType type)
     ResourceManager* rm = ResourceManager::instance();
 
     // Sort folders
-    QList<FolderWidget*> folders = rm->getFolders().values();
+    QList<FolderWidget*> folders = rm->getFolders(fileType()).values();
     std::sort(folders.begin(), folders.end(), [type](FolderWidget* a, FolderWidget* b) {
         QFileInfo fa(a->folderPath());
         QFileInfo fb(b->folderPath());
@@ -281,7 +130,7 @@ void AddSoundFeatureWidget::sortAll(SortType type)
     }
 
     // Sort single files
-    QList<FileWidget*> singles = rm->getSingleFiles().values();
+    QList<FileWidget*> singles = rm->getSingleFiles(fileType()).values();
     std::sort(singles.begin(), singles.end(), [type](FileWidget* a, FileWidget* b) {
         QFileInfo fa(a->filePath());
         QFileInfo fb(b->filePath());

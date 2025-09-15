@@ -42,12 +42,15 @@ private:
     QStackedWidget* stackedContent;   ///< Stacked widget for different content pages
     QProgressBar* globalProgressBar;  ///< Global progress bar at the bottom
     AddSoundFeatureWidget* addSoundFeatureWidget;
+    UseFeatureWidget* useFeatureWidget;
     AudioPlayer* audioPlayer;         ///< Audio player widget for playback control
 
     // Setup Methods
     void setupUI();       ///< Initializes the main UI components and layout
     void setupSidebar();  ///< Sets up the sidebar with navigation buttons
     void setupContent();  ///< Sets up the stacked content area with pages
+    void setupPages();    ///< Creates and configures the content pages
+    void setupConnections(); ///< Establishes signal-slot connections
 
 private slots:
     /**
@@ -76,6 +79,27 @@ private slots:
      * @param filePath Path to the audio file to play.
      */
     void onPlayRequested(const QString& filePath);
+
+    /**
+     * @brief Slot to handle file addition for locking.
+     * @param path The file path.
+     * @param type The file type.
+     */
+    void onFileAdded(const QString& path, ResourceManager::FileType type);
+
+    /**
+     * @brief Slot to handle file removal for unlocking.
+     * @param path The file path.
+     * @param type The file type.
+     */
+    void onFileRemoved(const QString& path, ResourceManager::FileType type);
+
+    /**
+     * @brief Slot to handle folder removal for unlocking files.
+     * @param folderPath The folder path.
+     * @param type The file type.
+     */
+    void onFolderRemoved(const QString& folderPath, ResourceManager::FileType type);
 
 };
 

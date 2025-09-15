@@ -59,6 +59,7 @@ public:
     // Processing
     bool loadModel(const QString& modelPath);
     void generateAudioFeatures(const QStringList& filePaths, const QString& outputFileName);
+    void startGenerateAudioFeatures(const QStringList& filePaths, const QString& outputFileName); // Async version
     void autoLoadSoundFeatures(); ///< Automatically load sound features from output_features folder
     void removeFeature(const QString& featureName); ///< Remove a sound feature by name
 
@@ -70,11 +71,16 @@ public:
     QStringList splitAndSaveWavChunks(const QString& audioPath);
     // New method to process audio with feature and save separated chunks
     QStringList processAndSaveSeparatedChunks(const QString& audioPath, const QString& featureName);
+    void startProcessAndSaveSeparatedChunks(const QString& audioPath, const QString& featureName); // Async version
 
 
     // Public wrappers for private methods
     std::vector<float> readAndResampleAudio(const QString& audioPath);
     bool saveWav(const torch::Tensor& waveform, const QString& filePath, int sampleRate = 32000);
+
+    // Getters for processors
+    HTSATProcessor* getHTSATProcessor() { return m_htsatProcessor; }
+    ZeroShotASPFeatureExtractor* getZeroShotASPProcessor() { return m_zeroShotAspProcessor; }
 
 signals:
     void fileAdded(const QString& path, ResourceManager::FileType type);
@@ -86,6 +92,15 @@ signals:
     void progressUpdated(int value);
 
     void featuresUpdated(); // Signal to notify that features have been updated
+
+    // Async processing signals
+    void processingStarted();
+    void processingProgress(int value);
+    void processingFinished(const QStringList& results);
+    void processingError(const QString& error);
+
+    void startHTSATProcessing(const QStringList& filePaths, const QString& outputFileName);
+    void startSeparationProcessing(const QString& audioPath, const QString& featureName);
 
 private:
     // Singleton pattern
@@ -109,6 +124,8 @@ private:
     QMap<FileType, FileTypeData> m_fileTypeData;  ///< Data storage for all file types
 
     QSet<QString> m_lockedFiles;              ///< Locked file paths
+
+    bool m_isProcessing;                      ///< Flag to indicate if async processing is ongoing
 
     // Helper methods
     bool isDuplicate(const QString& path, FileType type) const;
