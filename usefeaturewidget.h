@@ -14,6 +14,7 @@
 #include "folderwidget.h"
 #include "filewidget.h"
 #include "resourcemanager.h"
+#include "filemanagerwidget.h"
 
 /**
  * @brief Widget for using existing sound features to process WAV files.
@@ -21,7 +22,7 @@
  * This widget allows users to select a sound feature from the output_features folder,
  * choose WAV files or folders to process, initiate processing, and play the results.
  */
-class UseFeatureWidget : public QWidget
+class UseFeatureWidget : public FileManagerWidget
 {
     Q_OBJECT
 
@@ -54,6 +55,10 @@ private:
     void addFolder(const QString& folderPath); ///< Adds a folder and its WAV files
     void addSingleFile(const QString& filePath); ///< Adds a single WAV file
     QStringList splitAndSaveTempFiles(const QString& audioPath); ///< Splits audio into chunks and saves temp files with padding
+    void setupFeatureSelectionUI();           ///< Sets up the feature selection UI components
+    void setupFileManagementUI();              ///< Sets up the file management UI components
+    void setupProcessingUI();                   ///< Sets up the processing UI components
+    void setupConnections();                    ///< Sets up the signal-slot connections
 
 
 public slots:

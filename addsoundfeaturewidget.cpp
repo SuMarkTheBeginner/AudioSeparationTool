@@ -8,6 +8,7 @@
 #include <QMimeData>
 
 #include "resourcemanager.h"
+#include "constants.h"
 
 
 /**
@@ -18,10 +19,11 @@
  * @param parent The parent widget (default is nullptr).
  */
 AddSoundFeatureWidget::AddSoundFeatureWidget(QWidget *parent)
-    : QWidget(parent)
+    : FileManagerWidget(ResourceManager::FileType::WavForFeature, parent)
 {
-    setAcceptDrops(true);
-    setupUI();
+    setupCommonUI(Constants::SELECT_WAV_FOLDERS_TEXT, "Select Folder", "Select WAV Files");
+    setupFeatureInputUI();
+    setupFeatureButtonConnections();
 }
 
 /**
@@ -33,110 +35,50 @@ AddSoundFeatureWidget::AddSoundFeatureWidget(QWidget *parent)
  */
 void AddSoundFeatureWidget::setupUI()
 {
-    layout = new QVBoxLayout(this);
+    // Removed because setupCommonUI is called in constructor now
+}
 
-    infoLabel = new QLabel("Select folders containing WAV files or drag them here:", this);
-    layout->addWidget(infoLabel);
+/**
+ * @brief Sets up the feature input UI components.
+ *
+ * Creates the output file name input field and create feature button.
+ */
+void AddSoundFeatureWidget::setupFeatureInputUI()
+{
+    // Access the main layout from the base class
+    QVBoxLayout* mainLayout = qobject_cast<QVBoxLayout*>(this->QWidget::layout());
+    if (!mainLayout) {
+        qDebug() << "Error: Main layout is not a QVBoxLayout";
+        return;
+    }
 
-    statusLabel = new QLabel("", this);
-    statusLabel->setStyleSheet("color: red; font-weight: bold;");
-    statusLabel->setWordWrap(true);
-    layout->addWidget(statusLabel);
-
-    // Scrollable area for content
-    scrollArea = new QScrollArea(this);
-    scrollArea->setWidgetResizable(true);
-
-    QWidget* scrollContent = new QWidget(scrollArea);
-    QVBoxLayout* scrollLayout = new QVBoxLayout(scrollContent);
-    scrollLayout->setAlignment(Qt::AlignTop);
-    scrollLayout->setSpacing(0);
-    scrollLayout->setContentsMargins(0, 0, 0, 0);
-
-    // Container for folder widgets
-    folderContainer = new QWidget(scrollContent);
-    folderLayout = new QVBoxLayout(folderContainer);
-    folderLayout->setAlignment(Qt::AlignTop);
-    folderLayout->setSpacing(0);
-    folderLayout->setContentsMargins(0, 0, 0, 0);
-    folderContainer->setLayout(folderLayout);
-    folderContainer->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
-    folderContainer->setMinimumHeight(0);
-
-    // Container for single file widgets
-    singleFileContainer = new QWidget(scrollContent);
-    singleFileLayout = new QVBoxLayout(singleFileContainer);
-    singleFileLayout->setAlignment(Qt::AlignTop);
-    singleFileLayout->setSpacing(0);
-    singleFileLayout->setContentsMargins(0, 0, 0, 0);
-    singleFileContainer->setLayout(singleFileLayout);
-    singleFileContainer->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
-    singleFileContainer->setMinimumHeight(0);
-
-    scrollLayout->addWidget(folderContainer);
-    scrollLayout->addWidget(singleFileContainer);
-    scrollLayout->addStretch();
-    scrollContent->setLayout(scrollLayout);
-
-    scrollArea->setWidget(scrollContent);
-    scrollArea->setMinimumHeight(300);
-
-    layout->addWidget(scrollArea);
-
-    // Buttons for selecting files and folders
-    QHBoxLayout* selectBtnLayout = new QHBoxLayout();
-    selectFilesBtn = new QPushButton("Select WAV Files", this);
-    selectFolderBtn = new QPushButton("Select Folder", this);
-    selectBtnLayout->addWidget(selectFilesBtn);
-    selectBtnLayout->addWidget(selectFolderBtn);
-    layout->addLayout(selectBtnLayout);
-
-    // File name input and create feature button
+    // Add create feature button and output file name input below the scroll area and buttons
     QHBoxLayout* inputBtnLayout = new QHBoxLayout();
-    fileNameLabel = new QLabel("Output File Name:", this);
+    fileNameLabel = new QLabel(Constants::OUTPUT_FILE_NAME_LABEL, this);
     fileNameInput = new QLineEdit(this);
-    fileNameInput->setPlaceholderText("Enter file name...");
-    createFeatureBtn = new QPushButton("Create Feature", this);
+    fileNameInput->setPlaceholderText(Constants::FILE_NAME_PLACEHOLDER);
+    createFeatureBtn = new QPushButton(Constants::CREATE_FEATURE_BUTTON, this);
 
     inputBtnLayout->addWidget(fileNameLabel);
     inputBtnLayout->addWidget(fileNameInput);
     inputBtnLayout->addWidget(createFeatureBtn);
 
-    layout->addLayout(inputBtnLayout);
+    mainLayout->addLayout(inputBtnLayout);
+}
 
-    setLayout(layout);
-
-    // Connect select files button to open file dialog
-    connect(selectFilesBtn, &QPushButton::clicked, [this]() {
-        QFileDialog dialog(this);
-        dialog.setWindowTitle("Select WAV Files");
-        dialog.setFileMode(QFileDialog::ExistingFiles);
-        dialog.setNameFilter("WAV Files (*.wav);;All Files (*)");
-        if (dialog.exec()) {
-            QStringList selected = dialog.selectedFiles();
-            for (const QString& path : selected) {
-                QFileInfo fi(path);
-                if (fi.isFile() && fi.suffix().toLower() == "wav") {
-                    addSingleFile(path);
-                }
-            }
-        }
-    });
-
-    // Connect select folder button to open directory dialog
-    connect(selectFolderBtn, &QPushButton::clicked, [this]() {
-        QString folderPath = QFileDialog::getExistingDirectory(this, "Select Folder");
-        if (!folderPath.isEmpty()) {
-            addFolder(folderPath);
-        }
-    });
-
+/**
+ * @brief Sets up the connections for the feature creation button.
+ *
+ * Connects the create feature button to process selected files.
+ */
+void AddSoundFeatureWidget::setupFeatureButtonConnections()
+{
     // Connect create feature button to process selected files
     connect(createFeatureBtn, &QPushButton::clicked, [this]() {
         QStringList selectedFiles;
 
         // Collect selected files from folder widgets
-        QMap<QString, FolderWidget*> folders = ResourceManager::instance()->getFolders();
+        QMap<QString, FolderWidget*> folders = ResourceManager::instance()->getFolders(fileType());
         for (FolderWidget* fw : folders.values()) {
             QStringList selected = fw->getSelectedFiles();
             for (const QString& path : selected) {
@@ -145,7 +87,7 @@ void AddSoundFeatureWidget::setupUI()
         }
 
         // Collect selected files from single file widgets
-        QMap<QString, FileWidget*> singles = ResourceManager::instance()->getSingleFiles();
+        QMap<QString, FileWidget*> singles = ResourceManager::instance()->getSingleFiles(fileType());
         for (FileWidget* fw : singles.values()) {
             if (fw->checkBox()->isChecked()) {
                 selectedFiles.append(fw->filePath());
@@ -178,14 +120,14 @@ void AddSoundFeatureWidget::addFolder(const QString& folderPath)
     // Check if folder exists and has WAV files (for status message)
     QDir dir(folderPath);
     if (!dir.exists()) {
-        statusLabel->setText("Error: Folder does not exist: " + folderPath);
+        statusLabel->setText(Constants::FOLDER_NOT_EXIST.arg(folderPath));
         qDebug() << "Folder does not exist:" << folderPath;
         return;
     }
 
     QStringList wavFiles = dir.entryList(QStringList() << "*.wav", QDir::Files);
     if (wavFiles.isEmpty()) {
-        statusLabel->setText("No WAV files found in folder: " + folderPath);
+        statusLabel->setText(Constants::NO_WAV_FILES_IN_FOLDER.arg(folderPath));
         qDebug() << "No WAV files found in folder:" << folderPath;
         return;
     }
@@ -243,17 +185,17 @@ void AddSoundFeatureWidget::addSingleFile(const QString& filePath)
 
     QFileInfo fi(filePath);
     if (!fi.exists()) {
-        statusLabel->setText("Error: File does not exist: " + filePath);
+        statusLabel->setText(Constants::FILE_NOT_EXIST.arg(filePath));
         qDebug() << "File does not exist:" << filePath;
         return;
     }
     if (!fi.isReadable()) {
-        statusLabel->setText("Error: File is not readable: " + filePath);
+        statusLabel->setText(Constants::FILE_NOT_READABLE.arg(filePath));
         qDebug() << "File is not readable:" << filePath;
         return;
     }
     if (fi.suffix().toLower() != "wav") {
-        statusLabel->setText("Error: File is not a WAV file: " + filePath);
+        statusLabel->setText(Constants::FILE_NOT_WAV.arg(filePath));
         qDebug() << "File is not a WAV file:" << filePath;
         return;
     }

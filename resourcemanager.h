@@ -96,20 +96,17 @@ private:
     HTSATProcessor* m_htsatProcessor; ///< HTSATProcessor instance for audio processing
     ZeroShotASPFeatureExtractor* m_zeroShotAspProcessor; ///< ZeroShotASPFeatureExtractor instance for audio separation
 
-    // Data members for WavForFeature
-    QSet<QString> m_wavForFeaturePaths;           ///< All added file paths for WavForFeature
-    QMap<QString, FolderWidget*> m_wavForFeatureFolders; ///< Folder widgets for WavForFeature
-    QMap<QString, FileWidget*> m_wavForFeatureFiles; ///< Single file widgets for WavForFeature
+    /**
+     * @brief Struct to hold data for each file type.
+     */
+    struct FileTypeData {
+        QSet<QString> paths;                    ///< All added file paths
+        QMap<QString, FolderWidget*> folders;  ///< Folder widgets
+        QMap<QString, FileWidget*> files;      ///< Single file widgets
+    };
 
-    // Data members for WavForSeparation
-    QSet<QString> m_wavForSeparationPaths;           ///< All added file paths for WavForSeparation
-    QMap<QString, FolderWidget*> m_wavForSeparationFolders; ///< Folder widgets for WavForSeparation
-    QMap<QString, FileWidget*> m_wavForSeparationFiles; ///< Single file widgets for WavForSeparation
-
-    // Data members for SoundFeature (placeholder)
-    QSet<QString> m_soundFeaturePaths;           ///< All added file paths for SoundFeature
-    QMap<QString, FolderWidget*> m_soundFeatureFolders; ///< Folder widgets for SoundFeature
-    QMap<QString, FileWidget*> m_soundFeatureFiles; ///< Single file widgets for SoundFeature
+    
+    QMap<FileType, FileTypeData> m_fileTypeData;  ///< Data storage for all file types
 
     QSet<QString> m_lockedFiles;              ///< Locked file paths
 

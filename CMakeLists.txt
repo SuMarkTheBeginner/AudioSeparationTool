@@ -39,9 +39,12 @@ set(PROJECT_SOURCES
         mainwindow.h
         mainwindow.ui
         ${TS_FILES}
+        constants.h
+        errorhandler.h errorhandler.cpp
         addsoundfeaturewidget.h addsoundfeaturewidget.cpp
         usefeaturewidget.h usefeaturewidget.cpp
         fileutils.h fileutils.cpp
+        filemanagerwidget.h filemanagerwidget.cpp
         filewidget.h filewidget.cpp
         widecheckbox.h widecheckbox.cpp
         folderwidget.h folderwidget.cpp
@@ -57,6 +60,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         resourcemanager.h resourcemanager.cpp
         REVIEW_SUMMARY.md
         audioplayer.h audioplayer.cpp
+        #models.qrc
     )
     qt_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TS_FILES})
 else()

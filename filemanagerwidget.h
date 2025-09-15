@@ -58,25 +58,27 @@ protected:
     // UI Components
     QLabel* statusLabel;              ///< Label for status messages
     QScrollArea* scrollArea;          ///< Scrollable area for content
-    QWidget* fileContainer;           ///< Container for file widgets
-    QVBoxLayout* fileLayout;          ///< Layout for file widgets
+    QWidget* folderContainer;         ///< Container for folder widgets
+    QVBoxLayout* folderLayout;        ///< Layout for folder widgets
+    QWidget* singleFileContainer;     ///< Container for single file widgets
+    QVBoxLayout* singleFileLayout;    ///< Layout for single file widgets
     QPushButton* addFolderButton;     ///< Button to add folders
     QPushButton* addFileButton;       ///< Button to add files
 
-private:
+protected:
     ResourceManager::FileType m_fileType; ///< The type of files managed
 
     /**
      * @brief Adds a folder to the widget.
      * @param folderPath The path to the folder.
      */
-    void addFolder(const QString& folderPath);
+    virtual void addFolder(const QString& folderPath);
 
     /**
      * @brief Adds a single file to the widget.
      * @param filePath The path to the file.
      */
-    void addSingleFile(const QString& filePath);
+    virtual void addSingleFile(const QString& filePath);
 
 signals:
     void playRequested(const QString& filePath); ///< Signal emitted when play is requested

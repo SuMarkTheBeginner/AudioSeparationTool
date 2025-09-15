@@ -13,6 +13,7 @@
 #include <QDropEvent>
 #include "folderwidget.h"
 #include "filewidget.h"
+#include "filemanagerwidget.h"
 
 /**
  * @brief Widget for adding sound features by selecting folders or dragging WAV files.
@@ -21,7 +22,7 @@
  * WAV files into the interface. It organizes them into FolderWidget and FileWidget
  * components, provides sorting options, and supports drag-and-drop functionality.
  */
-class AddSoundFeatureWidget : public QWidget
+class AddSoundFeatureWidget : public FileManagerWidget
 {
     Q_OBJECT
 
@@ -95,8 +96,10 @@ private:
 
     // Private Methods
     void setupUI();                           ///< Sets up the user interface
-    void addFolder(const QString& folderPath); ///< Adds a folder and its WAV files
-    void addSingleFile(const QString& filePath); ///< Adds a single WAV file
+    void setupFeatureInputUI();               ///< Sets up the feature input UI components
+    void setupFeatureButtonConnections();     ///< Sets up the connections for the feature creation button
+    void addFolder(const QString& folderPath) override; ///< Adds a folder and its WAV files
+    void addSingleFile(const QString& filePath) override; ///< Adds a single WAV file
 
 signals:
     void playRequested(const QString& filePath);

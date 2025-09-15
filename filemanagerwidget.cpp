@@ -6,8 +6,6 @@
 #include <QDragEnterEvent>
 #include <QMimeData>
 #include "resourcemanager.h"
-#include "constants.h"
-#include "errorhandler.h"
 
 /**
  * @brief Constructs the FileManagerWidget.
@@ -42,21 +40,43 @@ void FileManagerWidget::setupCommonUI(const QString& instructionText, const QStr
     scrollArea = new QScrollArea(this);
     scrollArea->setWidgetResizable(true);
 
-    fileContainer = new QWidget(scrollArea);
-    fileLayout = new QVBoxLayout(fileContainer);
-    fileLayout->setAlignment(Qt::AlignTop);
-    fileLayout->setSpacing(0);
-    fileLayout->setContentsMargins(0, 0, 0, 0);
-    fileContainer->setLayout(fileLayout);
-    scrollArea->setWidget(fileContainer);
-    scrollArea->setMinimumHeight(Constants::SCROLL_AREA_MIN_HEIGHT);
+    QWidget* mainContainer = new QWidget(scrollArea);
+    QVBoxLayout* mainLayout = new QVBoxLayout(mainContainer);
+
+    // Folder section
+    QLabel* folderLabel = new QLabel("Folders:", mainContainer);
+    mainLayout->addWidget(folderLabel);
+
+    folderContainer = new QWidget(mainContainer);
+    folderLayout = new QVBoxLayout(folderContainer);
+    folderLayout->setAlignment(Qt::AlignTop);
+    folderLayout->setSpacing(0);
+    folderLayout->setContentsMargins(0, 0, 0, 0);
+    folderContainer->setLayout(folderLayout);
+    mainLayout->addWidget(folderContainer);
+
+    // Single file section
+    QLabel* singleFileLabel = new QLabel("Single Files:", mainContainer);
+    mainLayout->addWidget(singleFileLabel);
+
+    singleFileContainer = new QWidget(mainContainer);
+    singleFileLayout = new QVBoxLayout(singleFileContainer);
+    singleFileLayout->setAlignment(Qt::AlignTop);
+    singleFileLayout->setSpacing(0);
+    singleFileLayout->setContentsMargins(0, 0, 0, 0);
+    singleFileContainer->setLayout(singleFileLayout);
+    mainLayout->addWidget(singleFileContainer);
+
+    mainContainer->setLayout(mainLayout);
+    scrollArea->setWidget(mainContainer);
+    scrollArea->setMinimumHeight(300);
 
     layout->addWidget(scrollArea);
 
     // Buttons for adding files and folders
-    QHBoxLayout* addButtonsLayout = new QHBoxLayout();
     addFolderButton = new QPushButton(addFolderText, this);
     addFileButton = new QPushButton(addFileText, this);
+    QHBoxLayout* addButtonsLayout = new QHBoxLayout();
     addButtonsLayout->addWidget(addFolderButton);
     addButtonsLayout->addWidget(addFileButton);
     layout->addLayout(addButtonsLayout);
@@ -105,7 +125,7 @@ void FileManagerWidget::dropEvent(QDropEvent* event)
 
         if (fi.isDir()) {
             addFolder(path);
-        } else if (fi.isFile() && fi.suffix().toLower() == Constants::WAV_EXTENSION.mid(1)) { // Remove the dot
+        } else if (fi.isFile() && fi.suffix().toLower() == "wav") {
             addSingleFile(path);
         }
     }
@@ -122,13 +142,13 @@ void FileManagerWidget::addFolder(const QString& folderPath)
     // Check if folder exists and has WAV files
     QDir dir(folderPath);
     if (!dir.exists()) {
-        statusLabel->setText(Constants::FOLDER_NOT_EXIST.arg(folderPath));
+        statusLabel->setText("Error: Folder does not exist: " + folderPath);
         return;
     }
 
-    QStringList wavFiles = dir.entryList(QStringList() << Constants::WAV_EXTENSION, QDir::Files);
+    QStringList wavFiles = dir.entryList(QStringList() << "*.wav", QDir::Files);
     if (wavFiles.isEmpty()) {
-        statusLabel->setText(Constants::NO_WAV_FILES_IN_FOLDER.arg(folderPath));
+        statusLabel->setText("No WAV files found in folder: " + folderPath);
         return;
     }
 
@@ -140,18 +160,18 @@ void FileManagerWidget::addFolder(const QString& folderPath)
         if (filePath.startsWith(folderPath + "/")) {
             rm->removeFile(filePath, m_fileType);
             FileWidget* fw = singleFiles[filePath];
-            fileLayout->removeWidget(fw);
+            singleFileLayout->removeWidget(fw);
             // Widget is deleted in ResourceManager
         }
     }
 
     // Delegate to ResourceManager
-    FolderWidget* folderWidget = rm->addFolder(folderPath, fileContainer, m_fileType);
+    FolderWidget* folderWidget = rm->addFolder(folderPath, folderContainer, m_fileType);
 
     if (folderWidget) {
         // Add to layout if newly created
-        if (fileLayout->indexOf(folderWidget) == -1) {
-            fileLayout->addWidget(folderWidget);
+        if (folderLayout->indexOf(folderWidget) == -1) {
+            folderLayout->addWidget(folderWidget);
         }
 
         // Handle removal connections
@@ -161,7 +181,7 @@ void FileManagerWidget::addFolder(const QString& folderPath)
 
         connect(folderWidget, &FolderWidget::folderRemoved, this, [this, rm, folderWidget](const QString& folderPath){
             rm->removeFolder(folderPath, m_fileType);
-            fileLayout->removeWidget(folderWidget);
+            folderLayout->removeWidget(folderWidget);
             // Widget is deleted in ResourceManager
         });
 
@@ -181,23 +201,23 @@ void FileManagerWidget::addSingleFile(const QString& filePath)
 
     QFileInfo fi(filePath);
     if (!fi.exists()) {
-        statusLabel->setText(Constants::FILE_NOT_EXIST.arg(filePath));
+        statusLabel->setText("Error: File does not exist: " + filePath);
         return;
     }
     if (!fi.isReadable()) {
-        statusLabel->setText(Constants::FILE_NOT_READABLE.arg(filePath));
+        statusLabel->setText("Error: File is not readable: " + filePath);
         return;
     }
-    if (fi.suffix().toLower() != Constants::WAV_EXTENSION.mid(1)) {
-        statusLabel->setText(Constants::FILE_NOT_WAV.arg(filePath));
+    if (fi.suffix().toLower() != "wav") {
+        statusLabel->setText("Error: File is not a WAV file: " + filePath);
         return;
     }
 
     statusLabel->setText(""); // Clear previous errors
 
-    FileWidget* fileWidget = rm->addSingleFile(filePath, fileContainer, m_fileType);
+    FileWidget* fileWidget = rm->addSingleFile(filePath, singleFileContainer, m_fileType);
     if (fileWidget) {
-        fileLayout->addWidget(fileWidget);
+        singleFileLayout->addWidget(fileWidget);
 
         connect(fileWidget, &FileWidget::fileRemoved,
                 this, [this, rm](const QString& path){

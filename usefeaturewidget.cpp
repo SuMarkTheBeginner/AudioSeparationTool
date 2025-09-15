@@ -5,9 +5,10 @@
 #include <QDebug>
 
 #include "resourcemanager.h"
+#include "constants.h"
 
 UseFeatureWidget::UseFeatureWidget(QWidget *parent)
-    : QWidget(parent)
+    : FileManagerWidget(ResourceManager::FileType::WavForSeparation, parent)
 {
     setupUI();
     loadFeatures();
@@ -17,7 +18,20 @@ void UseFeatureWidget::setupUI()
 {
     mainLayout = new QVBoxLayout(this);
 
-    featureLabel = new QLabel("Select Sound Feature:", this);
+    setupFeatureSelectionUI();
+    setupFileManagementUI();
+    setupProcessingUI();
+    setupConnections();
+}
+
+/**
+ * @brief Sets up the feature selection UI components.
+ *
+ * Creates the feature label, combo box, and delete button.
+ */
+void UseFeatureWidget::setupFeatureSelectionUI()
+{
+    featureLabel = new QLabel(Constants::SELECT_FEATURE_LABEL, this);
     mainLayout->addWidget(featureLabel);
 
     // Create horizontal layout for combobox and delete button
@@ -25,12 +39,20 @@ void UseFeatureWidget::setupUI()
     featureComboBox = new QComboBox(this);
     featureLayout->addWidget(featureComboBox);
 
-    QPushButton* deleteButton = new QPushButton("Delete", this);
+    QPushButton* deleteButton = new QPushButton(Constants::DELETE_BUTTON, this);
     featureLayout->addWidget(deleteButton);
 
     mainLayout->addLayout(featureLayout);
+}
 
-    fileLabel = new QLabel("Select WAV Files or Folders to Process:", this);
+/**
+ * @brief Sets up the file management UI components.
+ *
+ * Creates the file label, status label, add buttons, and scroll area.
+ */
+void UseFeatureWidget::setupFileManagementUI()
+{
+    fileLabel = new QLabel(Constants::SELECT_WAV_FILES_TEXT, this);
     mainLayout->addWidget(fileLabel);
 
     statusLabel = new QLabel("", this);
@@ -52,32 +74,68 @@ void UseFeatureWidget::setupUI()
     fileLayout = new QVBoxLayout(fileContainer);
     fileScrollArea->setWidget(fileContainer);
     mainLayout->addWidget(fileScrollArea, 1);
+}
 
-    processButton = new QPushButton("Process", this);
+/**
+ * @brief Sets up the processing UI components.
+ *
+ * Creates the process button, result label, and result list.
+ */
+void UseFeatureWidget::setupProcessingUI()
+{
+    processButton = new QPushButton(Constants::PROCESS_BUTTON, this);
     mainLayout->addWidget(processButton);
 
-    resultLabel = new QLabel("Processed Files:", this);
+    resultLabel = new QLabel(Constants::PROCESSED_FILES_LABEL, this);
     mainLayout->addWidget(resultLabel);
 
     resultList = new QListWidget(this);
     mainLayout->addWidget(resultList, 1);
+}
 
+/**
+ * @brief Sets up the signal-slot connections.
+ *
+ * Connects buttons and signals for functionality.
+ */
+void UseFeatureWidget::setupConnections()
+{
     connect(processButton, &QPushButton::clicked, this, &UseFeatureWidget::onProcessClicked);
     connect(this, &UseFeatureWidget::playRequested, this, &UseFeatureWidget::onPlayResult);
-    connect(addFolderButton, &QPushButton::clicked, this, [this]() {
-        QString folderPath = QFileDialog::getExistingDirectory(this, "Select Folder to Add");
-        if (!folderPath.isEmpty()) {
-            addFolder(folderPath);
-        }
-    });
-    connect(addFileButton, &QPushButton::clicked, this, [this]() {
-        QStringList files = QFileDialog::getOpenFileNames(this, "Select WAV Files to Add", QString(), "WAV Files (*.wav)");
-        for (const QString& file : files) {
-            addSingleFile(file);
-        }
-    });
 
-    connect(deleteButton, &QPushButton::clicked, this, &UseFeatureWidget::onDeleteClicked);
+    // Find the add buttons from the layout
+    QHBoxLayout* addButtonsLayout = qobject_cast<QHBoxLayout*>(mainLayout->itemAt(3)->layout());
+    if (addButtonsLayout) {
+        QPushButton* addFolderButton = qobject_cast<QPushButton*>(addButtonsLayout->itemAt(0)->widget());
+        QPushButton* addFileButton = qobject_cast<QPushButton*>(addButtonsLayout->itemAt(1)->widget());
+
+        if (addFolderButton) {
+            connect(addFolderButton, &QPushButton::clicked, this, [this]() {
+                QString folderPath = QFileDialog::getExistingDirectory(this, "Select Folder to Add");
+                if (!folderPath.isEmpty()) {
+                    addFolder(folderPath);
+                }
+            });
+        }
+
+        if (addFileButton) {
+            connect(addFileButton, &QPushButton::clicked, this, [this]() {
+                QStringList files = QFileDialog::getOpenFileNames(this, "Select WAV Files to Add", QString(), "WAV Files (*.wav)");
+                for (const QString& file : files) {
+                    addSingleFile(file);
+                }
+            });
+        }
+    }
+
+    // Find the delete button from the feature layout
+    QHBoxLayout* featureLayout = qobject_cast<QHBoxLayout*>(mainLayout->itemAt(1)->layout());
+    if (featureLayout) {
+        QPushButton* deleteButton = qobject_cast<QPushButton*>(featureLayout->itemAt(1)->widget());
+        if (deleteButton) {
+            connect(deleteButton, &QPushButton::clicked, this, &UseFeatureWidget::onDeleteClicked);
+        }
+    }
 }
 
 void UseFeatureWidget::loadFeatures()
@@ -109,14 +167,14 @@ void UseFeatureWidget::addFolder(const QString& folderPath)
     // Check if folder exists and has WAV files
     QDir dir(folderPath);
     if (!dir.exists()) {
-        statusLabel->setText("Error: Folder does not exist: " + folderPath);
+        statusLabel->setText(Constants::FOLDER_NOT_EXIST.arg(folderPath));
         qDebug() << "Folder does not exist:" << folderPath;
         return;
     }
 
     QStringList wavFiles = dir.entryList(QStringList() << "*.wav", QDir::Files);
     if (wavFiles.isEmpty()) {
-        statusLabel->setText("No WAV files found in folder: " + folderPath);
+        statusLabel->setText(Constants::NO_WAV_FILES_IN_FOLDER.arg(folderPath));
         qDebug() << "No WAV files found in folder:" << folderPath;
         return;
     }
@@ -166,17 +224,17 @@ void UseFeatureWidget::addSingleFile(const QString& filePath)
 
     QFileInfo fi(filePath);
     if (!fi.exists()) {
-        statusLabel->setText("Error: File does not exist: " + filePath);
+        statusLabel->setText(Constants::FILE_NOT_EXIST.arg(filePath));
         qDebug() << "File does not exist:" << filePath;
         return;
     }
     if (!fi.isReadable()) {
-        statusLabel->setText("Error: File is not readable: " + filePath);
+        statusLabel->setText(Constants::FILE_NOT_READABLE.arg(filePath));
         qDebug() << "File is not readable:" << filePath;
         return;
     }
     if (fi.suffix().toLower() != "wav") {
-        statusLabel->setText("Error: File is not a WAV file: " + filePath);
+        statusLabel->setText(Constants::FILE_NOT_WAV.arg(filePath));
         qDebug() << "File is not a WAV file:" << filePath;
         return;
     }

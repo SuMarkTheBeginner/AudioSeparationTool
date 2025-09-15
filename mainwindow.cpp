@@ -54,7 +54,7 @@ void MainWindow::setupUI()
     centralWidgetContainer->setLayout(mainVLayout);
     setCentralWidget(centralWidgetContainer);
 
-    setWindowTitle("Qt MainWindow with Left Sidebar");
+    setWindowTitle("Audio Separation Tool");
     resize(800, 600);
 }
 

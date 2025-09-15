@@ -10,6 +10,7 @@
 #include <QTextStream>
 #include <vector>
 #include <QDateTime>
+#include <QCoreApplication>
 
 // Singleton instance
 ResourceManager* ResourceManager::m_instance = nullptr;
@@ -35,6 +36,11 @@ ResourceManager::ResourceManager(QObject* parent)
 {
     m_htsatProcessor = new HTSATProcessor(this);
     m_zeroShotAspProcessor = new ZeroShotASPFeatureExtractor(this);
+
+    // Initialize FileTypeData for each file type
+    m_fileTypeData[FileType::WavForFeature] = FileTypeData();
+    m_fileTypeData[FileType::SoundFeature] = FileTypeData();
+    m_fileTypeData[FileType::WavForSeparation] = FileTypeData();
 }
 
 /**
@@ -42,35 +48,19 @@ ResourceManager::ResourceManager(QObject* parent)
  */
 ResourceManager::~ResourceManager()
 {
-    // Cleanup widgets for WavForFeature
-    for (auto widget : m_wavForFeatureFolders.values()) {
-        delete widget;
+    // Cleanup widgets for all file types
+    for (auto it = m_fileTypeData.begin(); it != m_fileTypeData.end(); ++it) {
+        FileTypeData& data = it.value();
+        for (auto widget : data.folders.values()) {
+            delete widget;
+        }
+        for (auto widget : data.files.values()) {
+            delete widget;
+        }
+        data.folders.clear();
+        data.files.clear();
     }
-    for (auto widget : m_wavForFeatureFiles.values()) {
-        delete widget;
-    }
-    m_wavForFeatureFolders.clear();
-    m_wavForFeatureFiles.clear();
-
-    // Cleanup widgets for WavForSeparation
-    for (auto widget : m_wavForSeparationFolders.values()) {
-        delete widget;
-    }
-    for (auto widget : m_wavForSeparationFiles.values()) {
-        delete widget;
-    }
-    m_wavForSeparationFolders.clear();
-    m_wavForSeparationFiles.clear();
-
-    // Cleanup widgets for SoundFeature
-    for (auto widget : m_soundFeatureFolders.values()) {
-        delete widget;
-    }
-    for (auto widget : m_soundFeatureFiles.values()) {
-        delete widget;
-    }
-    m_soundFeatureFolders.clear();
-    m_soundFeatureFiles.clear();
+    m_fileTypeData.clear();
 }
 
 /**
@@ -110,29 +100,18 @@ FolderWidget* ResourceManager::addFolder(const QString& folderPath, QWidget* fol
 
     qDebug() << "Adding folder:" << folderPath << "with" << files.size() << fileTypeDescription << "files";
 
-    // Get the appropriate maps based on type
-    QMap<QString, FolderWidget*>* folderMap = nullptr;
-    QSet<QString>* pathSet = nullptr;
-    if (type == FileType::WavForFeature) {
-        folderMap = &m_wavForFeatureFolders;
-        pathSet = &m_wavForFeaturePaths;
-    } else if (type == FileType::WavForSeparation) {
-        folderMap = &m_wavForSeparationFolders;
-        pathSet = &m_wavForSeparationPaths;
-    } else if (type == FileType::SoundFeature) {
-        folderMap = &m_soundFeatureFolders;
-        pathSet = &m_soundFeaturePaths;
-    }
-
-    if (!folderMap || !pathSet) return nullptr;
+    // Get the appropriate data for the type
+    FileTypeData& data = m_fileTypeData[type];
+    QMap<QString, FolderWidget*>& folderMap = data.folders;
+    QSet<QString>& pathSet = data.paths;
 
     // Create FolderWidget if not exists
     FolderWidget* folderWidget = nullptr;
-    if (folderMap->contains(folderPath)) {
-        folderWidget = (*folderMap)[folderPath];
+    if (folderMap.contains(folderPath)) {
+        folderWidget = folderMap[folderPath];
     } else {
         folderWidget = new FolderWidget(folderPath, folderParent);
-        folderMap->insert(folderPath, folderWidget);
+        folderMap.insert(folderPath, folderWidget);
         emitFolderAdded(folderPath, type);
     }
 
@@ -141,7 +120,7 @@ FolderWidget* ResourceManager::addFolder(const QString& folderPath, QWidget* fol
         QString fullPath = dir.absoluteFilePath(f);
         if (!isDuplicate(fullPath, type)) {
             newFiles.append(f);
-            pathSet->insert(fullPath);
+            pathSet.insert(fullPath);
             emitFileAdded(fullPath, type);
         }
     }
@@ -191,25 +170,14 @@ FileWidget* ResourceManager::addSingleFile(const QString& filePath, QWidget* fil
 
     qDebug() << "Adding single file:" << filePath;
 
-    // Get the appropriate maps based on type
-    QMap<QString, FileWidget*>* fileMap = nullptr;
-    QSet<QString>* pathSet = nullptr;
-    if (type == FileType::WavForFeature) {
-        fileMap = &m_wavForFeatureFiles;
-        pathSet = &m_wavForFeaturePaths;
-    } else if (type == FileType::WavForSeparation) {
-        fileMap = &m_wavForSeparationFiles;
-        pathSet = &m_wavForSeparationPaths;
-    } else if (type == FileType::SoundFeature) {
-        fileMap = &m_soundFeatureFiles;
-        pathSet = &m_soundFeaturePaths;
-    }
-
-    if (!fileMap || !pathSet) return nullptr;
+    // Get the appropriate data for the type
+    FileTypeData& data = m_fileTypeData[type];
+    QMap<QString, FileWidget*>& fileMap = data.files;
+    QSet<QString>& pathSet = data.paths;
 
     FileWidget* fileWidget = new FileWidget(filePath, fileParent);
-    fileMap->insert(fi.absoluteFilePath(), fileWidget);
-    pathSet->insert(fi.absoluteFilePath());
+    fileMap.insert(fi.absoluteFilePath(), fileWidget);
+    pathSet.insert(fi.absoluteFilePath());
     emitFileAdded(fi.absoluteFilePath(), type);
 
     return fileWidget;
@@ -222,27 +190,15 @@ FileWidget* ResourceManager::addSingleFile(const QString& filePath, QWidget* fil
  */
 void ResourceManager::removeFile(const QString& filePath, FileType type)
 {
-    // Get the appropriate containers based on type
-    QSet<QString>* pathSet = nullptr;
-    QMap<QString, FileWidget*>* fileMap = nullptr;
+    // Get the appropriate data for the type
+    FileTypeData& data = m_fileTypeData[type];
+    QSet<QString>& pathSet = data.paths;
+    QMap<QString, FileWidget*>& fileMap = data.files;
 
-    if (type == FileType::WavForFeature) {
-        pathSet = &m_wavForFeaturePaths;
-        fileMap = &m_wavForFeatureFiles;
-    } else if (type == FileType::WavForSeparation) {
-        pathSet = &m_wavForSeparationPaths;
-        fileMap = &m_wavForSeparationFiles;
-    } else if (type == FileType::SoundFeature) {
-        pathSet = &m_soundFeaturePaths;
-        fileMap = &m_soundFeatureFiles;
-    }
-
-    if (!pathSet || !fileMap) return;
-
-    if (pathSet->remove(filePath)) {
+    if (pathSet.remove(filePath)) {
         // Remove from single files if present
-        if (fileMap->contains(filePath)) {
-            FileWidget* fw = fileMap->take(filePath);
+        if (fileMap.contains(filePath)) {
+            FileWidget* fw = fileMap.take(filePath);
             fw->deleteLater();
         }
         // Note: For folder files, removal is handled by FolderWidget
@@ -257,36 +213,24 @@ void ResourceManager::removeFile(const QString& filePath, FileType type)
  */
 void ResourceManager::removeFolder(const QString& folderPath, FileType type)
 {
-    // Get the appropriate containers based on type
-    QMap<QString, FolderWidget*>* folderMap = nullptr;
-    QSet<QString>* pathSet = nullptr;
+    // Get the appropriate data for the type
+    FileTypeData& data = m_fileTypeData[type];
+    QMap<QString, FolderWidget*>& folderMap = data.folders;
+    QSet<QString>& pathSet = data.paths;
 
-    if (type == FileType::WavForFeature) {
-        folderMap = &m_wavForFeatureFolders;
-        pathSet = &m_wavForFeaturePaths;
-    } else if (type == FileType::WavForSeparation) {
-        folderMap = &m_wavForSeparationFolders;
-        pathSet = &m_wavForSeparationPaths;
-    } else if (type == FileType::SoundFeature) {
-        folderMap = &m_soundFeatureFolders;
-        pathSet = &m_soundFeaturePaths;
-    }
-
-    if (!folderMap || !pathSet) return;
-
-    if (folderMap->contains(folderPath)) {
-        FolderWidget* fw = folderMap->take(folderPath);
+    if (folderMap.contains(folderPath)) {
+        FolderWidget* fw = folderMap.take(folderPath);
         fw->deleteLater();
 
         // Remove all files in the folder from pathSet
         QSet<QString> toRemove;
-        for (const QString& filePath : *pathSet) {
+        for (const QString& filePath : pathSet) {
             if (filePath.startsWith(folderPath + "/")) {
                 toRemove.insert(filePath);
             }
         }
         for (const QString& filePath : toRemove) {
-            pathSet->remove(filePath);
+            pathSet.remove(filePath);
             emitFileRemoved(filePath, type);
         }
         emitFolderRemoved(folderPath, type);
@@ -303,6 +247,12 @@ void ResourceManager::sortAll(Qt::SortOrder order)
     // Here we can sort the maps if needed, but since QMap is ordered by key,
     // and keys are paths, sorting by path might be sufficient for now.
     qDebug() << "sortAll called with order:" << (order == Qt::AscendingOrder ? "Ascending" : "Descending");
+
+    // Example: sort folders and files by keys (paths)
+    for (auto& data : m_fileTypeData) {
+        // QMap is already sorted by keys, so no action needed
+        Q_UNUSED(data);
+    }
 }
 
 /**
@@ -352,14 +302,7 @@ bool ResourceManager::isFileLocked(const QString& filePath) const
  */
 QSet<QString> ResourceManager::getAddedFiles(FileType type) const
 {
-    if (type == FileType::WavForFeature) {
-        return m_wavForFeaturePaths;
-    } else if (type == FileType::WavForSeparation) {
-        return m_wavForSeparationPaths;
-    } else if (type == FileType::SoundFeature) {
-        return m_soundFeaturePaths;
-    }
-    return QSet<QString>();
+    return m_fileTypeData.value(type).paths;
 }
 
 /**
@@ -369,14 +312,7 @@ QSet<QString> ResourceManager::getAddedFiles(FileType type) const
  */
 QMap<QString, FolderWidget*> ResourceManager::getFolders(FileType type) const
 {
-    if (type == FileType::WavForFeature) {
-        return m_wavForFeatureFolders;
-    } else if (type == FileType::WavForSeparation) {
-        return m_wavForSeparationFolders;
-    } else if (type == FileType::SoundFeature) {
-        return m_soundFeatureFolders;
-    }
-    return QMap<QString, FolderWidget*>();
+    return m_fileTypeData.value(type).folders;
 }
 
 /**
@@ -386,14 +322,7 @@ QMap<QString, FolderWidget*> ResourceManager::getFolders(FileType type) const
  */
 QMap<QString, FileWidget*> ResourceManager::getSingleFiles(FileType type) const
 {
-    if (type == FileType::WavForFeature) {
-        return m_wavForFeatureFiles;
-    } else if (type == FileType::WavForSeparation) {
-        return m_wavForSeparationFiles;
-    } else if (type == FileType::SoundFeature) {
-        return m_soundFeatureFiles;
-    }
-    return QMap<QString, FileWidget*>();
+    return m_fileTypeData.value(type).files;
 }
 
 /**
@@ -404,14 +333,7 @@ QMap<QString, FileWidget*> ResourceManager::getSingleFiles(FileType type) const
  */
 bool ResourceManager::isDuplicate(const QString& path, FileType type) const
 {
-    if (type == FileType::WavForFeature) {
-        return m_wavForFeaturePaths.contains(path);
-    } else if (type == FileType::WavForSeparation) {
-        return m_wavForSeparationPaths.contains(path);
-    } else if (type == FileType::SoundFeature) {
-        return m_soundFeaturePaths.contains(path);
-    }
-    return false;
+    return m_fileTypeData.value(type).paths.contains(path);
 }
 
 /**
@@ -488,8 +410,9 @@ void ResourceManager::generateAudioFeatures(const QStringList& filePaths, const 
 {
     // Load model if not loaded
     if (!m_htsatProcessor->isModelLoaded()) {
-        QString modelPath = "models/htsat_embedding_model.pt";
+        QString modelPath = "/models/htsat_embedding_model.pt";
         qDebug() << "Current working directory:" << QDir::currentPath();
+        qDebug() << "Application directory:" << QCoreApplication::applicationDirPath();
         qDebug() << "Model path:" << modelPath;
         QFileInfo fi(modelPath);
         qDebug() << "Absolute model path:" << fi.absoluteFilePath();
@@ -674,7 +597,7 @@ QStringList ResourceManager::processAndSaveSeparatedChunks(const QString& audioP
 
     // Load ZeroShotASP model if not loaded
     if (!m_zeroShotAspProcessor->isModelLoaded()) {
-        QString modelPath = "models/zero_shot_asp_separation_model.pt";
+        QString modelPath = "/models/zero_shot_asp_separation_model.pt";
         if (!loadZeroShotASPModel(modelPath)) {
             qWarning() << "Failed to load ZeroShotASP model from:" << modelPath;
             return separatedFiles;
