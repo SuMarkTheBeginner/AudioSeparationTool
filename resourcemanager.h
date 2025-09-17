@@ -8,81 +8,91 @@
 #include <QtGlobal>
 #include "folderwidget.h"
 #include "filewidget.h"
-#include "htsatprocessor.h"
-#include "zero_shot_asp_feature_extractor.h"
+#include <vector>
+#ifndef Q_MOC_RUN
+#undef slots
+#endif
+#include <torch/torch.h>
+#ifndef Q_MOC_RUN
+#define slots
+#endif
 
 /**
  * @brief Singleton class for managing all file resources in the application.
  *
  * Centralizes file management including adding/removing files and folders,
  * duplicate checking, locking/unlocking files, and emitting signals for UI updates.
- * Supports three types of files: WAV for feature generation, sound feature vectors,
- * and WAV files for separation.
+ * Supports multiple file types including WAVs, sound features, temporary segments,
+ * and final separation results.
  */
 class ResourceManager : public QObject
 {
     Q_OBJECT
 
 public:
-    /**
-     * @brief Gets the singleton instance of ResourceManager.
-     * @return Pointer to the ResourceManager instance.
-     */
+    // Singleton instance
     static ResourceManager* instance();
 
-    /**
-     * @brief Enumeration for file types managed by ResourceManager.
-     */
+    // File types
     enum class FileType {
-        WavForFeature,     ///< WAV files used to generate sound feature vectors
-        SoundFeature,      ///< Sound feature vector files
-        WavForSeparation   ///< WAV files to be separated using feature vectors
+        WavForFeature,      ///< WAV files used to generate sound feature vectors
+        WavForSeparation,   ///< WAV files to be separated using feature vectors
+        TempSegment,        ///< Temporary chunks during separation
+        SoundFeature,       ///< Sound feature vector files
+        SeparationResult    ///< Final separated audio result files
     };
 
-    // Core management methods
+    // =========================
+    // Core management (檔案/資料夾管理)
+    // =========================
     FolderWidget* addFolder(const QString& folderPath, QWidget* folderParent, FileType type = FileType::WavForFeature);
     FileWidget* addSingleFile(const QString& filePath, QWidget* fileParent, FileType type = FileType::WavForFeature);
-    void removeFile(const QString& filePath, FileType type = FileType::WavForFeature);
-    void removeFolder(const QString& folderPath, FileType type = FileType::WavForFeature);
-    void sortAll(Qt::SortOrder order = Qt::AscendingOrder); // Simplified sorting
-
-    // Locking methods
+    void removeFile(const QString& filePath, FileType type);
+    void removeFolder(const QString& folderPath, FileType type);
+    void sortAll(Qt::SortOrder order = Qt::AscendingOrder);
     bool lockFile(const QString& filePath);
     bool unlockFile(const QString& filePath);
     bool isFileLocked(const QString& filePath) const;
-
-    // Getters
     QSet<QString> getAddedFiles(FileType type = FileType::WavForFeature) const;
     QMap<QString, FolderWidget*> getFolders(FileType type = FileType::WavForFeature) const;
     QMap<QString, FileWidget*> getSingleFiles(FileType type = FileType::WavForFeature) const;
 
-    // Processing
-    bool loadModel(const QString& modelPath);
-    void generateAudioFeatures(const QStringList& filePaths, const QString& outputFileName);
-    void startGenerateAudioFeatures(const QStringList& filePaths, const QString& outputFileName); // Async version
-    void autoLoadSoundFeatures(); ///< Automatically load sound features from output_features folder
-    void removeFeature(const QString& featureName); ///< Remove a sound feature by name
+    // =========================
+    // Audio / Feature Processing
+    // =========================
+    void startGenerateAudioFeatures(const QStringList& filePaths, const QString& outputFileName); // Async HTSAT
+    void startSeparateAudio(const QStringList& filePaths, const QString& featureName);         // Async separation
 
-    // ZeroShotASP Processing
-    bool loadZeroShotASPModel(const QString& modelPath);
-    torch::Tensor separateAudio(const torch::Tensor& waveform, const torch::Tensor& condition);
+    // =========================
+    // File saving interfaces for workers
+    // =========================
+    QString createOutputFilePath(const QString& outputFileName);                     // HTSAT feature
+    bool saveEmbeddingToFile(const std::vector<float>& embedding, const QString& filePath);
+    QString saveEmbedding(const std::vector<float>& embedding, const QString& outputFileName);
 
-    // New method to split and save wav chunks using HTSATProcessor and ZeroShotASPFeatureExtractor
-    QStringList splitAndSaveWavChunks(const QString& audioPath);
-    // New method to process audio with feature and save separated chunks
-    QStringList processAndSaveSeparatedChunks(const QString& audioPath, const QString& featureName);
-    void startProcessAndSaveSeparatedChunks(const QString& audioPath, const QString& featureName); // Async version
+    QString createTempFilePath(const QString& baseName, int index, FileType type = FileType::TempSegment); // Temp chunk
+    bool saveWav(const torch::Tensor& waveform, const QString& filePath, int sampleRate = 32000);          // Temp chunk or SeparationResult
+    bool saveSeparationResult(const torch::Tensor& waveform, const QString& outputName);
 
+    // =========================
+    // Non-data / UI-related
+    // =========================
+    void autoLoadSoundFeatures(); ///< 自動載入 sound feature，僅影響 UI/列表
+    void removeFeature(const QString& featureName);
 
-    // Public wrappers for private methods
-    std::vector<float> readAndResampleAudio(const QString& audioPath);
-    bool saveWav(const torch::Tensor& waveform, const QString& filePath, int sampleRate = 32000);
+    // =========================
+    // Helper for deletion policy
+    // =========================
+    static bool isDeletable(FileType type);
 
-    // Getters for processors
-    HTSATProcessor* getHTSATProcessor() { return m_htsatProcessor; }
-    ZeroShotASPFeatureExtractor* getZeroShotASPProcessor() { return m_zeroShotAspProcessor; }
+    // =========================
+    // Directory creation
+    // =========================
+    void createOutputDirectories();
+
 
 signals:
+    // Resource management / UI update
     void fileAdded(const QString& path, ResourceManager::FileType type);
     void fileRemoved(const QString& path, ResourceManager::FileType type);
     void folderAdded(const QString& folderPath, ResourceManager::FileType type);
@@ -90,17 +100,15 @@ signals:
     void fileLocked(const QString& path);
     void fileUnlocked(const QString& path);
     void progressUpdated(int value);
+    void featuresUpdated();
 
-    void featuresUpdated(); // Signal to notify that features have been updated
-
-    // Async processing signals
+    // Async processing
     void processingStarted();
     void processingProgress(int value);
     void processingFinished(const QStringList& results);
     void processingError(const QString& error);
-
     void startHTSATProcessing(const QStringList& filePaths, const QString& outputFileName);
-    void startSeparationProcessing(const QString& audioPath, const QString& featureName);
+    void startSeparationProcessing(const QStringList& filePaths, const QString& featureName);
 
 private:
     // Singleton pattern
@@ -108,31 +116,32 @@ private:
     ResourceManager(QObject* parent = nullptr);
     ~ResourceManager();
 
-    HTSATProcessor* m_htsatProcessor; ///< HTSATProcessor instance for audio processing
-    ZeroShotASPFeatureExtractor* m_zeroShotAspProcessor; ///< ZeroShotASPFeatureExtractor instance for audio separation
-
-    /**
-     * @brief Struct to hold data for each file type.
-     */
+    // Data storage
     struct FileTypeData {
-        QSet<QString> paths;                    ///< All added file paths
-        QMap<QString, FolderWidget*> folders;  ///< Folder widgets
-        QMap<QString, FileWidget*> files;      ///< Single file widgets
+        QSet<QString> paths;
+        QMap<QString, FolderWidget*> folders;
+        QMap<QString, FileWidget*> files;
     };
+    QMap<FileType, FileTypeData> m_fileTypeData;
+    QSet<QString> m_lockedFiles;
+    bool m_isProcessing;
 
-    
-    QMap<FileType, FileTypeData> m_fileTypeData;  ///< Data storage for all file types
-
-    QSet<QString> m_lockedFiles;              ///< Locked file paths
-
-    bool m_isProcessing;                      ///< Flag to indicate if async processing is ongoing
-
-    // Helper methods
+    // Private helpers
     bool isDuplicate(const QString& path, FileType type) const;
     void emitFileAdded(const QString& path, FileType type);
     void emitFileRemoved(const QString& path, FileType type);
     void emitFolderAdded(const QString& folderPath, FileType type);
     void emitFolderRemoved(const QString& folderPath, FileType type);
+
+    void handleChunk(const QString& audioPath,
+                 const QString& featureName,
+                 const torch::Tensor& chunkData);
+
+                 // 接收單檔案最終結果
+    void handleFinalResult(const QString& audioPath,
+                       const QString& featureName,
+                       const torch::Tensor& finalTensor);
+
 };
 
 #endif // RESOURCEMANAGER_H

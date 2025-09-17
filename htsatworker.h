@@ -3,6 +3,9 @@
 
 #include <QObject>
 #include <QStringList>
+#include <QVector>
+#include <vector>
+#include "htsatprocessor.h"
 
 class HTSATWorker : public QObject
 {
@@ -10,17 +13,21 @@ class HTSATWorker : public QObject
 
 public:
     explicit HTSATWorker(QObject *parent = nullptr);
+    
 
 public slots:
     void generateFeatures(const QStringList& filePaths, const QString& outputFileName);
+    
 
 signals:
     void progressUpdated(int value);
-    void finished(const QString& resultFile);
+    void finished(const std::vector<float>& avgEmb, const QString& outputFileName);
     void error(const QString& errorMessage);
 
 private:
-    QString doGenerateAudioFeatures(const QStringList& filePaths, const QString& outputFileName);
+    std::vector<float> doGenerateAudioFeatures(const QStringList& filePaths, const QString& outputFileName);
+    QVector<std::vector<float>> processFilesAndCollectEmbeddings(const QStringList& filePaths, HTSATProcessor* processor);
+    std::vector<float> computeAverageEmbedding(const QVector<std::vector<float>>& embeddings);
 };
 
 #endif // HTSATWORKER_H

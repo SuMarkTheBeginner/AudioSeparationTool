@@ -1,79 +1,94 @@
 #include "htsatworker.h"
 #include "resourcemanager.h"
+#include "audio_preprocess_utils.h"
 #include <QDebug>
-#include <QDir>
-#include <QFile>
-#include <QTextStream>
-#include <QDateTime>
-#include <QFileInfo>
+#include <vector>
+#include "constants.h"
+#include <sndfile.h>
 
 HTSATWorker::HTSATWorker(QObject *parent)
     : QObject(parent)
 {
 }
 
-void HTSATWorker::generateFeatures(const QStringList& filePaths, const QString& outputFileName)
-{
-    QString result = doGenerateAudioFeatures(filePaths, outputFileName);
-    if (!result.isEmpty()) {
-        emit finished(result);
+void HTSATWorker::generateFeatures(const QStringList& filePaths, const QString& outputFileName) {
+    std::vector<float> avg_emb = doGenerateAudioFeatures(filePaths, outputFileName);
+    if (!avg_emb.empty()) {
+        emit finished(avg_emb, outputFileName);
     } else {
         emit error("Failed to generate features");
     }
 }
 
-QString HTSATWorker::doGenerateAudioFeatures(const QStringList& filePaths, const QString& outputFileName)
+std::vector<float> HTSATWorker::doGenerateAudioFeatures(const QStringList& filePaths, const QString& outputFileName)
 {
-    ResourceManager* rm = ResourceManager::instance();
-
-    // Load model if not loaded
-    if (!rm->loadModel("/models/htsat_embedding_model.pt")) {
+    HTSATProcessor processor;
+    if (!processor.loadModel(Constants::HTSAT_MODEL_PATH)) {
         qDebug() << "Failed to load HTSAT model";
-        return QString();
+        return std::vector<float>();
     }
 
+    QVector<std::vector<float>> embeddings = processFilesAndCollectEmbeddings(filePaths, &processor);
+    if (embeddings.isEmpty()) {
+        return std::vector<float>();
+    }
+
+    std::vector<float> avg_emb = computeAverageEmbedding(embeddings);
+    return avg_emb;
+}
+
+
+
+QVector<std::vector<float>> HTSATWorker::processFilesAndCollectEmbeddings(const QStringList& filePaths, HTSATProcessor* processor)
+{
     QVector<std::vector<float>> embeddings;
     int totalFiles = filePaths.size();
     for (int i = 0; i < totalFiles; ++i) {
         const QString& filePath = filePaths[i];
-        std::vector<float> embedding = rm->getHTSATProcessor()->processAudio(filePath);
+
+        // Get sample rate and channels
+        SF_INFO sfinfo;
+        SNDFILE* file = sf_open(filePath.toStdString().c_str(), SFM_READ, &sfinfo);
+        if (!file) {
+            qDebug() << "Failed to open file for info:" << filePath;
+            continue;
+        }
+        int sampleRate = sfinfo.samplerate;
+        int channels = sfinfo.channels;
+        sf_close(file);
+
+        // Load audio tensor
+        torch::Tensor audioTensor = AudioPreprocessUtils::loadAudio(filePath);
+        if (audioTensor.numel() == 0) {
+            qDebug() << "Failed to load audio:" << filePath;
+            continue;
+        }
+
+        // Convert to mono if needed
+        if (channels > 1) {
+            audioTensor = AudioPreprocessUtils::convertToMono(audioTensor, channels);
+        }
+
+        // Resample if needed
+        if (sampleRate != Constants::AUDIO_SAMPLE_RATE) {
+            audioTensor = AudioPreprocessUtils::resampleAudio(audioTensor, sampleRate, Constants::AUDIO_SAMPLE_RATE);
+        }
+
+        // Process tensor
+        std::vector<float> embedding = processor->processTensor(audioTensor);
         if (embedding.empty()) {
-            qDebug() << "Failed to process file:" << filePath;
+            qDebug() << "Failed to process tensor for file:" << filePath;
             continue;
         }
         embeddings.append(embedding);
         int progress = (i + 1) * 100 / totalFiles;
         emit progressUpdated(progress);
     }
+    return embeddings;
+}
 
-    if (embeddings.isEmpty()) {
-        qDebug() << "No embeddings generated.";
-        return QString();
-    }
-
-    // Define output folder
-    QString outputFolder = "output_features";
-    QDir dir(outputFolder);
-    if (!dir.exists()) {
-        if (!dir.mkpath(".")) {
-            qDebug() << "Failed to create output folder:" << outputFolder;
-            return QString();
-        }
-    }
-
-    // Generate timestamp
-    QString timestamp = QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss");
-
-    // Construct base name
-    QString baseName = QFileInfo(outputFileName).baseName();
-    if (baseName.isEmpty()) {
-        baseName = "output";
-    }
-
-    // Construct full output file path with timestamp
-    QString finalOutputFileName = outputFolder + "/" + baseName + "_" + timestamp + ".txt";
-
-    // Compute average embedding
+std::vector<float> HTSATWorker::computeAverageEmbedding(const QVector<std::vector<float>>& embeddings)
+{
     std::vector<float> avg_emb(embeddings[0].size(), 0.0f);
     for (const auto& emb : embeddings) {
         for (size_t i = 0; i < emb.size(); ++i) {
@@ -83,23 +98,5 @@ QString HTSATWorker::doGenerateAudioFeatures(const QStringList& filePaths, const
     for (size_t i = 0; i < avg_emb.size(); ++i) {
         avg_emb[i] /= embeddings.size();
     }
-
-    // Save averaged embedding to file
-    QFile file(finalOutputFileName);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        qDebug() << "Failed to open output file:" << finalOutputFileName;
-        return QString();
-    }
-
-    QTextStream out(&file);
-    for (size_t i = 0; i < avg_emb.size(); ++i) {
-        out << avg_emb[i];
-        if (i < avg_emb.size() - 1) out << " ";
-    }
-    out << "\n";
-    file.close();
-
-    qDebug() << "Averaged embedding saved to:" << finalOutputFileName;
-
-    return finalOutputFileName;
+    return avg_emb;
 }

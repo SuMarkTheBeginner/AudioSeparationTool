@@ -1,6 +1,21 @@
 cmake_minimum_required(VERSION 3.5)
 
-project(AudioSeparationTool VERSION 0.1 LANGUAGES CXX)
+option(FORCE_CPU_ONLY "Force CPU-only build, disable CUDA" ON)
+
+if(FORCE_CPU_ONLY)
+    project(AudioSeparationTool VERSION 0.1 LANGUAGES CXX)
+    set(USE_CUDA OFF CACHE BOOL "Use CUDA" FORCE)
+    set(CAFFE2_USE_CUDA OFF CACHE BOOL "Use CUDA in Caffe2" FORCE)
+    set(CAFFE2_USE_CUDNN OFF CACHE BOOL "Use CUDNN in Caffe2" FORCE)
+    set(USE_CUDNN OFF CACHE BOOL "Use CUDNN" FORCE)
+    set(USE_NCCL OFF CACHE BOOL "Use NCCL" FORCE)
+else()
+    project(AudioSeparationTool VERSION 0.1 LANGUAGES CXX CUDA)
+    # Set compiler explicitly to GCC 11 for CUDA compatibility
+    set(CMAKE_C_COMPILER "/usr/bin/gcc-11" CACHE STRING "C compiler" FORCE)
+    set(CMAKE_CXX_COMPILER "/usr/bin/g++-11" CACHE STRING "C++ compiler" FORCE)
+    set(CMAKE_CUDA_HOST_COMPILER "/usr/bin/gcc-11" CACHE STRING "CUDA host compiler" FORCE)
+endif()
 
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
@@ -21,9 +36,57 @@ else()
     message(WARNING "Qt Multimedia not found. Audio playback will not be available.")
 endif()
 
-### 🔹 加入 LibTorch
-# 修改這裡成你的 libtorch 解壓路徑
-set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};$ENV{HOME}/libtorch")
+### 🔹 LibTorch
+if(FORCE_CPU_ONLY)
+    message(STATUS "Using CPU-only LibTorch")
+    message(STATUS "Please download from: https://pytorch.org/get-started/locally/")
+    message(STATUS "Select: LibTorch -> Stable -> Your OS -> C++/Java -> CPU")
+else()
+    message(STATUS "Using CUDA-enabled LibTorch for GPU support")
+    message(STATUS "Please download from: https://pytorch.org/get-started/locally/")
+    message(STATUS "Select: LibTorch -> Stable -> Your OS -> C++/Java -> CUDA -> cxx11 ABI")
+endif()
+message(STATUS "Extract and update this path:")
+
+set(LIBTORCH_PATHS
+    "$ENV{HOME}/libtorch"
+)
+
+set(LIBTORCH_FOUND FALSE)
+foreach(LIBTORCH_PATH ${LIBTORCH_PATHS})
+    if(EXISTS "${LIBTORCH_PATH}/share/cmake/Torch/TorchConfig.cmake")
+        set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};${LIBTORCH_PATH}")
+        set(LIBTORCH_FOUND TRUE)
+        message(STATUS "Found LibTorch at: ${LIBTORCH_PATH}")
+        break()
+    endif()
+endforeach()
+
+if(NOT LIBTORCH_FOUND)
+    if(FORCE_CPU_ONLY)
+        message(FATAL_ERROR "LibTorch not found. Please download CPU-only LibTorch and extract to ~/libtorch")
+    else()
+        message(FATAL_ERROR "LibTorch not found. Please download CUDA-enabled LibTorch and extract to ~/libtorch")
+    endif()
+endif()
+
+if(NOT FORCE_CPU_ONLY)
+    # Enable CUDA - set these BEFORE find_package
+    set(USE_CUDA ON CACHE BOOL "Use CUDA" FORCE)
+    set(CAFFE2_USE_CUDA ON CACHE BOOL "Use CUDA in Caffe2" FORCE)
+    set(CAFFE2_USE_CUDNN ON CACHE BOOL "Use CUDNN in Caffe2" FORCE)
+    set(USE_CUDNN ON CACHE BOOL "Use CUDNN" FORCE)
+    set(USE_NCCL ON CACHE BOOL "Use NCCL" FORCE)
+
+    # Enable CUDA architecture detection
+    set(TORCH_CUDA_ARCH_LIST "8.6" CACHE STRING "CUDA architectures" FORCE)
+    set(CMAKE_CUDA_ARCHITECTURES "8.6" CACHE STRING "CUDA architectures" FORCE)
+
+    # Do not remove CUDA from PATH and environment
+    # Do not clear CUDA environment variables
+    # Do not disable CUDA language completely
+endif()
+
 find_package(Torch REQUIRED)
 
 ### 🔹 用 pkg-config 找 libsndfile
@@ -52,15 +115,14 @@ set(PROJECT_SOURCES
         zero_shot_asp_feature_extractor.h zero_shot_asp_feature_extractor.cpp
         htsatworker.h htsatworker.cpp
         separationworker.h separationworker.cpp
+        audio_preprocess_utils.h audio_preprocess_utils.cpp
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(AudioSeparationTool
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
-        .gitignore
         resourcemanager.h resourcemanager.cpp
-        REVIEW_SUMMARY.md
         audioplayer.h audioplayer.cpp
         #models.qrc
     )
@@ -93,6 +155,10 @@ if(HAS_MULTIMEDIA)
     target_compile_definitions(AudioSeparationTool PRIVATE HAS_MULTIMEDIA)
 endif()
 
+# 🔹 啟用 AddressSanitizer (ASan)
+target_compile_options(AudioSeparationTool PRIVATE -fsanitize=address -g)
+target_link_options(AudioSeparationTool PRIVATE -fsanitize=address)
+
 # 避免 LibTorch 一些標準差異警告
 set_property(TARGET AudioSeparationTool PROPERTY CXX_STANDARD 17)
 
@@ -117,3 +183,5 @@ install(TARGETS AudioSeparationTool
 if(QT_VERSION_MAJOR EQUAL 6)
     qt_finalize_executable(AudioSeparationTool)
 endif()
+
+

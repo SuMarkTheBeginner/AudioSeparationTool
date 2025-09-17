@@ -55,6 +55,19 @@ const int WINDOW_HEIGHT = 600;
 const int PROGRESS_RANGE_MIN = 0;
 const int PROGRESS_RANGE_MAX = 100;
 
+// New Constants for paths
+const QString OUTPUT_FEATURES_DIR = "output_features";       // Sound feature embeddings
+const QString SEPARATED_RESULT_DIR = "separated_results";     // Separation results
+const QString TEMP_SEGMENTS_DIR = "temp_chunks";             // Temporary chunks during processing
+const QString HTSAT_MODEL_PATH = "/home/mark/AudioSeparationTool/models/htsat_embedding_model.pt";              // HTSAT model folder
+const QString ZERO_SHOT_ASP_MODEL_PATH = "/home/mark/AudioSeparationTool/models/zero_shot_asp_separation_model.pt"; // ZeroShotASP model file
+
+// Audio processing constants
+const int AUDIO_SAMPLE_RATE = 32000;        // Sample rate in Hz
+const int AUDIO_CLIP_SAMPLES = 320000;      // Number of samples per clip (10 seconds @ 32kHz)
+const float AUDIO_OVERLAP_RATE = 0.5f;      // Overlap rate for overlap-add processing
+
+
 }
 
 #endif // CONSTANTS_H

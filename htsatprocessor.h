@@ -10,13 +10,11 @@
 #define slots
 #endif
 #include <vector>
-#include <sndfile.h>
 
 /**
  * @brief Class for handling HTSAT (Hierarchical Token-Semantic Audio Transformer) model processing.
  *
- * This class loads TorchScript models, processes audio files by resampling to 32kHz,
- * prepares tensors, and generates embeddings using the HTSAT model.
+ * This class loads TorchScript models and processes preprocessed audio tensors to generate embeddings.
  */
 class HTSATProcessor : public QObject
 {
@@ -44,17 +42,17 @@ public:
     std::vector<float> processAudio(const QString& audioPath);
 
     /**
+     * @brief Processes a preprocessed audio tensor to generate an embedding.
+     * @param audioTensor The preprocessed audio tensor (mono, 32kHz).
+     * @return The generated embedding as a vector of floats, or empty vector on failure.
+     */
+    std::vector<float> processTensor(const torch::Tensor& audioTensor);
+
+    /**
      * @brief Checks if the model is loaded and ready for inference.
      * @return True if model is loaded, false otherwise.
      */
     bool isModelLoaded() const;
-
-    /**
-     * @brief Reads and resamples audio file to 32kHz.
-     * @param audioPath Path to the audio file.
-     * @return Resampled audio data as vector of floats.
-     */
-    std::vector<float> readAndResampleAudio(const QString& audioPath);
 
 signals:
     /**
@@ -72,44 +70,6 @@ signals:
 private:
     torch::jit::script::Module model; ///< The loaded TorchScript model
     bool modelLoaded;                 ///< Flag indicating if the model is loaded
-
-    /**
-     * @brief Prepares the tensor for model input.
-     * @param audioData The resampled audio data.
-     * @return The prepared tensor.
-     */
-    torch::Tensor prepareTensor(const std::vector<float>& audioData);
-
-    /**
-     * @brief Validates the audio file format.
-     * @param audioPath Path to the audio file.
-     * @return True if the format is valid, false otherwise.
-     */
-    bool validateAudioFormat(const QString& audioPath);
-
-    /**
-     * @brief Reads audio data from file.
-     * @param audioPath Path to the audio file.
-     * @param sfinfo Output parameter for audio file info.
-     * @return Audio data as vector of floats.
-     */
-    std::vector<float> readAudioFile(const QString& audioPath, SF_INFO& sfinfo);
-
-    /**
-     * @brief Converts multi-channel audio data to mono by averaging channels.
-     * @param inputData Multi-channel audio data.
-     * @param channels Number of channels.
-     * @return Mono audio data.
-     */
-    std::vector<float> convertToMono(const std::vector<float>& inputData, int channels);
-
-    /**
-     * @brief Resamples audio data to 32kHz if needed.
-     * @param inputData Input audio data.
-     * @param inputSampleRate Input sample rate.
-     * @return Resampled audio data.
-     */
-    std::vector<float> resampleTo32kHz(const std::vector<float>& inputData, int inputSampleRate);
 };
 
 #endif // HTSATPROCESSOR_H

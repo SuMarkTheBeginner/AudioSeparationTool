@@ -87,7 +87,7 @@ void AddSoundFeatureWidget::setupFeatureButtonConnections()
             return;
         }
 
-        ResourceManager::instance()->generateAudioFeatures(selectedFiles, outputFileName);
+        ResourceManager::instance()->startGenerateAudioFeatures(selectedFiles, outputFileName);
     });
 }
 

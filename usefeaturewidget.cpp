@@ -12,6 +12,10 @@ UseFeatureWidget::UseFeatureWidget(QWidget *parent)
 {
     setupUI();
     loadFeatures();
+
+    // Connect to ResourceManager featuresUpdated signal to auto-refresh feature list
+    ResourceManager* rm = ResourceManager::instance();
+    connect(rm, &ResourceManager::featuresUpdated, this, &UseFeatureWidget::refreshFeatures);
 }
 
 void UseFeatureWidget::setupUI()
@@ -264,7 +268,7 @@ void UseFeatureWidget::onProcessClicked()
     connect(rm, &ResourceManager::processingFinished, this, &UseFeatureWidget::onProcessingFinished);
 
     // Start async processing
-    rm->startProcessAndSaveSeparatedChunks(filesToProcess.first(), selectedFeature);
+    rm->startSeparateAudio(filesToProcess, selectedFeature);
 }
 
 void UseFeatureWidget::onProcessingProgress(int value)
