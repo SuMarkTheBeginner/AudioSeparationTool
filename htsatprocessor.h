@@ -33,6 +33,7 @@ public:
      * @return True if loading succeeded, false otherwise.
      */
     bool loadModel(const QString& modelPath);
+    bool loadModelFromResource(const QString& resourcePath);
 
     /**
      * @brief Processes an audio file to generate an embedding.
@@ -73,3 +74,4 @@ private:
 };
 
 #endif // HTSATPROCESSOR_H
+    

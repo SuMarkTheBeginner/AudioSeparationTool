@@ -309,7 +309,7 @@ void ResourceManager::sortAll(Qt::SortOrder order)
  */
 bool ResourceManager::lockFile(const QString& filePath)
 {
-    if (FileUtils::setFileReadOnly(filePath, true)) {
+    if (FileUtils::setFileReadOnly(filePath, true) == FileUtils::FileOperationResult::Success) {
         m_lockedFiles.insert(filePath);
         emit fileLocked(filePath);
         return true;
@@ -324,7 +324,7 @@ bool ResourceManager::lockFile(const QString& filePath)
  */
 bool ResourceManager::unlockFile(const QString& filePath)
 {
-    if (FileUtils::setFileReadOnly(filePath, false)) {
+    if (FileUtils::setFileReadOnly(filePath, false) == FileUtils::FileOperationResult::Success) {
         m_lockedFiles.remove(filePath);
         emit fileUnlocked(filePath);
         return true;

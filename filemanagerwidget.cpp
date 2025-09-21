@@ -50,6 +50,9 @@ void FileManagerWidget::setupCommonUI(const QString& instructionText, const QStr
     folderLayout->setSpacing(0);
     folderLayout->setContentsMargins(0, 0, 0, 0);
     folderContainer->setLayout(folderLayout);
+    // Set size policy and minimum height to avoid initial vertical space but keep width
+    folderContainer->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
+    folderContainer->setMinimumHeight(0);
     mainLayout->addWidget(folderContainer);
 
     // Single file section
@@ -59,6 +62,9 @@ void FileManagerWidget::setupCommonUI(const QString& instructionText, const QStr
     singleFileLayout->setSpacing(0);
     singleFileLayout->setContentsMargins(0, 0, 0, 0);
     singleFileContainer->setLayout(singleFileLayout);
+    // Set size policy and minimum height to avoid initial vertical space but keep width
+    singleFileContainer->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
+    singleFileContainer->setMinimumHeight(0);
     mainLayout->addWidget(singleFileContainer);
 
     mainContainer->setLayout(mainLayout);

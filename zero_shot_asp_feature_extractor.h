@@ -32,6 +32,9 @@ public:
     // 卸載模型以釋放記憶體
     void unloadModel();
 
+    // 從資源載入模型
+    bool loadModelFromResource(const QString& resourcePath);
+
 signals:
     void finished(const torch::Tensor& output);
     void error(const QString& errorMessage);

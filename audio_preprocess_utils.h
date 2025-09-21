@@ -58,6 +58,22 @@ torch::Tensor extractChannel(const torch::Tensor& audio, int channelIndex, int n
  */
 torch::Tensor trimSilence(const torch::Tensor& audio, float threshold = 0.01f);
 
+/**
+ * @brief Saves a torch::Tensor as a WAV file.
+ * @param audio The audio tensor to save (1D or 2D).
+ * @param filePath The path to save the WAV file.
+ * @param sampleRate The sample rate for the WAV file (default 32000).
+ * @return True if saving succeeded, false otherwise.
+ */
+bool saveToWav(const torch::Tensor& audio, const QString& filePath, int sampleRate = 32000);
+
+/**
+ * @brief Applies a Hann window to an audio chunk.
+ * @param chunk The input audio chunk tensor (1D).
+ * @return The chunk multiplied by the Hann window.
+ */
+torch::Tensor applyHannWindow(const torch::Tensor& chunk);
+
 } // namespace AudioPreprocessUtils
 
 #endif // AUDIO_PREPROCESS_UTILS_H

@@ -101,6 +101,23 @@ private slots:
      */
     void onFolderRemoved(const QString& folderPath, ResourceManager::FileType type);
 
+    /**
+     * @brief Slot to handle processing started.
+     */
+    void onProcessingStarted();
+
+    /**
+     * @brief Slot to handle processing finished.
+     * @param results List of result file paths.
+     */
+    void onProcessingFinished(const QStringList& results = QStringList());
+
+    /**
+     * @brief Slot to handle processing error.
+     * @param error Error message.
+     */
+    void onProcessingError(const QString& error);
+
 };
 
 #endif // MAINWINDOW_H

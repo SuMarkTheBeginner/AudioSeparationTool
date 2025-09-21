@@ -16,6 +16,10 @@ UseFeatureWidget::UseFeatureWidget(QWidget *parent)
     // Connect to ResourceManager featuresUpdated signal to auto-refresh feature list
     ResourceManager* rm = ResourceManager::instance();
     connect(rm, &ResourceManager::featuresUpdated, this, &UseFeatureWidget::refreshFeatures);
+
+    // Connect processing signals once here
+    connect(rm, &ResourceManager::processingProgress, this, &UseFeatureWidget::onProcessingProgress);
+    connect(rm, &ResourceManager::processingFinished, this, &UseFeatureWidget::onProcessingFinished);
 }
 
 void UseFeatureWidget::setupUI()
@@ -92,7 +96,7 @@ void UseFeatureWidget::setupConnections()
     // Find the delete button from the feature layout
     QVBoxLayout* mainLayout = qobject_cast<QVBoxLayout*>(this->QWidget::layout());
     if (mainLayout) {
-        QHBoxLayout* featureLayout = qobject_cast<QHBoxLayout*>(mainLayout->itemAt(1)->layout());
+        QHBoxLayout* featureLayout = qobject_cast<QHBoxLayout*>(mainLayout->itemAt(5)->layout());
         if (featureLayout) {
             QPushButton* deleteButton = qobject_cast<QPushButton*>(featureLayout->itemAt(1)->widget());
             if (deleteButton) {
@@ -263,10 +267,6 @@ void UseFeatureWidget::onProcessClicked()
     // Disable process button during processing
     processButton->setEnabled(false);
 
-    // Connect signals to update UI
-    connect(rm, &ResourceManager::processingProgress, this, &UseFeatureWidget::onProcessingProgress);
-    connect(rm, &ResourceManager::processingFinished, this, &UseFeatureWidget::onProcessingFinished);
-
     // Start async processing
     rm->startSeparateAudio(filesToProcess, selectedFeature);
 }
@@ -291,10 +291,6 @@ void UseFeatureWidget::onProcessingFinished(const QStringList& results)
 
     // Refresh feature list or results
     loadFeatures();
-
-    // Disconnect signals to avoid duplicate connections
-    disconnect(rm, &ResourceManager::processingProgress, this, &UseFeatureWidget::onProcessingProgress);
-    disconnect(rm, &ResourceManager::processingFinished, this, &UseFeatureWidget::onProcessingFinished);
 
     resultLabel->setText("Processing finished.");
 }

@@ -23,9 +23,12 @@ void HTSATWorker::generateFeatures(const QStringList& filePaths, const QString& 
 std::vector<float> HTSATWorker::doGenerateAudioFeatures(const QStringList& filePaths, const QString& outputFileName)
 {
     HTSATProcessor processor;
-    if (!processor.loadModel(Constants::HTSAT_MODEL_PATH)) {
-        qDebug() << "Failed to load HTSAT model";
-        return std::vector<float>();
+    if (!processor.loadModelFromResource(Constants::HTSAT_MODEL_RESOURCE)) {
+        qDebug() << "Failed to load HTSAT model from resource, trying absolute path...";
+        if (!processor.loadModel(Constants::HTSAT_MODEL_PATH)) {
+            qDebug() << "Failed to load HTSAT model";
+            return std::vector<float>();
+        }
     }
 
     QVector<std::vector<float>> embeddings = processFilesAndCollectEmbeddings(filePaths, &processor);
@@ -58,26 +61,44 @@ QVector<std::vector<float>> HTSATWorker::processFilesAndCollectEmbeddings(const 
         sf_close(file);
 
         // Load audio tensor
+        qDebug() << "HTSATWorker::processFilesAndCollectEmbeddings - Loading audio file:" << filePath;
         torch::Tensor audioTensor = AudioPreprocessUtils::loadAudio(filePath);
         if (audioTensor.numel() == 0) {
-            qDebug() << "Failed to load audio:" << filePath;
+            qDebug() << "HTSATWorker::processFilesAndCollectEmbeddings - Failed to load audio:" << filePath;
             continue;
         }
 
-        // Convert to mono if needed
-        if (channels > 1) {
-            audioTensor = AudioPreprocessUtils::convertToMono(audioTensor, channels);
-        }
-
-        // Resample if needed
-        if (sampleRate != Constants::AUDIO_SAMPLE_RATE) {
-            audioTensor = AudioPreprocessUtils::resampleAudio(audioTensor, sampleRate, Constants::AUDIO_SAMPLE_RATE);
-        }
+        qDebug() << "Audio tensor length:" << audioTensor.size(0);
+        qDebug() << "Audio tensor dtype:"
+                 << QString::fromStdString(std::string(audioTensor.dtype().name()));
 
         // Process tensor
-        std::vector<float> embedding = processor->processTensor(audioTensor);
+        qDebug() << "HTSATWorker::processFilesAndCollectEmbeddings - Processing tensor for file:" << filePath;
+// 確保 processor 接收 shape=(frames, 1)
+        torch::Tensor inputTensor = audioTensor.unsqueeze(1);
+        std::vector<float> embedding = processor->processTensor(inputTensor);
         if (embedding.empty()) {
-            qDebug() << "Failed to process tensor for file:" << filePath;
+            qDebug() << "HTSATWorker::processFilesAndCollectEmbeddings - Failed to process tensor for file:" << filePath;
+        qDebug() << "Audio tensor length:" << audioTensor.size(0);
+        qDebug() << "HTSATWorker::processFilesAndCollectEmbeddings - Audio tensor dtype:"
+                     << QString::fromStdString(std::string(audioTensor.dtype().name()));
+        qDebug() << "HTSATWorker::processFilesAndCollectEmbeddings - Audio tensor numel:" << audioTensor.numel();
+
+            // Try to provide more specific error information
+            if (audioTensor.numel() == 0) {
+                qDebug() << "HTSATWorker::processFilesAndCollectEmbeddings - Audio tensor is empty";
+            } else {
+                auto minVal = audioTensor.min().item<float>();
+                auto maxVal = audioTensor.max().item<float>();
+                qDebug() << "HTSATWorker::processFilesAndCollectEmbeddings - Audio value range: [" << minVal << "," << maxVal << "]";
+
+                if (!torch::isfinite(audioTensor).all().item<bool>()) {
+                    qDebug() << "HTSATWorker::processFilesAndCollectEmbeddings - Audio tensor contains NaN or infinite values";
+                }
+            }
+
+            // Continue processing other files instead of failing completely
+            qDebug() << "HTSATWorker::processFilesAndCollectEmbeddings - Skipping file and continuing with other files";
             continue;
         }
         embeddings.append(embedding);

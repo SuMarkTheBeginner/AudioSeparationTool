@@ -59,14 +59,34 @@ const int PROGRESS_RANGE_MAX = 100;
 const QString OUTPUT_FEATURES_DIR = "output_features";       // Sound feature embeddings
 const QString SEPARATED_RESULT_DIR = "separated_results";     // Separation results
 const QString TEMP_SEGMENTS_DIR = "temp_chunks";             // Temporary chunks during processing
+
+// Model file paths (absolute paths for development)
 const QString HTSAT_MODEL_PATH = "/home/mark/AudioSeparationTool/models/htsat_embedding_model.pt";              // HTSAT model folder
 const QString ZERO_SHOT_ASP_MODEL_PATH = "/home/mark/AudioSeparationTool/models/zero_shot_asp_separation_model.pt"; // ZeroShotASP model file
+
+// Model resource paths (for embedded models)
+const QString HTSAT_MODEL_RESOURCE = ":/models/htsat_embedding_model.pt";              // HTSAT model resource path
+const QString ZERO_SHOT_ASP_MODEL_RESOURCE = ":/models/zero_shot_asp_separation_model.pt"; // ZeroShotASP model resource path
 
 // Audio processing constants
 const int AUDIO_SAMPLE_RATE = 32000;        // Sample rate in Hz
 const int AUDIO_CLIP_SAMPLES = 320000;      // Number of samples per clip (10 seconds @ 32kHz)
 const float AUDIO_OVERLAP_RATE = 0.5f;      // Overlap rate for overlap-add processing
 
+// Debug announcement constants
+const QString DEBUG_FILE_SELECTED = "Debug: File selected - %1";
+const QString DEBUG_FILE_DESELECTED = "Debug: File deselected - %1";
+const QString DEBUG_PLAY_CLICKED = "Debug: Play button clicked for file - %1";
+const QString DEBUG_REMOVE_CLICKED = "Debug: Remove button clicked for file - %1";
+const QString DEBUG_PROCESS_CLICKED = "Debug: Process button clicked with %1 files";
+const QString DEBUG_FEATURE_SELECTED = "Debug: Feature selected - %1";
+const QString DEBUG_FILE_TARGET = "Debug: Input target file - %1";
+const QString DEBUG_PROCESSING_STARTED = "Debug: Processing started for %1 files";
+const QString DEBUG_PROCESSING_PROGRESS = "Debug: Processing progress - %1%";
+const QString DEBUG_PROCESSING_FINISHED = "Debug: Processing finished with %1 results";
+const QString DEBUG_FEATURE_CREATED = "Debug: Feature creation started for %1 files";
+const QString DEBUG_FOLDER_ADDED = "Debug: Folder added - %1";
+const QString DEBUG_FILE_ADDED = "Debug: File added - %1";
 
 }
 

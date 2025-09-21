@@ -109,7 +109,7 @@ torch::Tensor SeparationWorker::doOverlapAdd(const std::vector<torch::Tensor>& c
                 return torch::Tensor();
             }
 
-            // Overlap-add with linear ramp weights
+             // Overlap-add with linear ramp weights
             torch::Tensor window = torch::ones({chunkSize}, torch::kFloat);
             int64_t fadeLength = static_cast<int64_t>(chunkSize * overlapRate);
             if (fadeLength > 0) {
@@ -119,12 +119,24 @@ torch::Tensor SeparationWorker::doOverlapAdd(const std::vector<torch::Tensor>& c
                 window.slice(0, chunkSize - fadeLength, chunkSize) = fadeOut;
             }
 
-            output.slice(1, start, end).squeeze(0).squeeze(1).add_(chunk.squeeze(0).squeeze(1) * window);
+            // Get the target slice from output tensor
+            torch::Tensor outputSlice = output.slice(1, start, end);  // Shape: [1, chunkSize, 1]
+            torch::Tensor chunkSlice = chunk.slice(1, 0, chunkSize);  // Shape: [1, chunkSize, 1]
+            
+            // Apply windowing to chunk
+            torch::Tensor windowedChunk = chunkSlice * window.unsqueeze(0).unsqueeze(2);  // Shape: [1, chunkSize, 1]
+            
+            // Add to output slice
+            outputSlice.add_(windowedChunk);
+            
+            // Update weight
             weight.slice(0, start, end).add_(window);
         }
 
         // Normalize by weight to avoid amplitude scaling
         weight = torch::where(weight == 0, torch::ones_like(weight), weight);
+        // Reshape weight to match output tensor dimensions for broadcasting
+        weight = weight.unsqueeze(0).unsqueeze(2);  // Shape: [totalLength] -> [1, totalLength, 1]
         output = output / weight;
 
         // Output is already (1, totalLength, 1), no reshape needed
@@ -140,14 +152,19 @@ torch::Tensor SeparationWorker::doOverlapAdd(const QStringList& chunkFilePaths)
 {
     std::vector<torch::Tensor> chunks;
     for (const QString& path : chunkFilePaths) {
-        torch::Tensor chunk = AudioPreprocessUtils::loadAudio(path);
-        if (chunk.numel() == 0) {
-            emit error(QString("Failed to load chunk from: %1").arg(path));
-            return torch::Tensor();
-        }
-        // chunk is (frames, 1), reshape to (1, frames, 1)
-        chunk = chunk.unsqueeze(0);
-        chunks.push_back(chunk);
+    torch::Tensor chunk = AudioPreprocessUtils::loadAudio(path); // 1D (frames,)
+    if (chunk.numel() == 0) {
+        emit error(QString("Failed to load chunk from: %1").arg(path));
+        return torch::Tensor();
+    }
+
+    // Apply Hann window directly
+    chunk = AudioPreprocessUtils::applyHannWindow(chunk); // still 1D
+
+    // reshape to (1, frames, 1) for model
+    chunk = chunk.unsqueeze(0).unsqueeze(2);
+
+    chunks.push_back(chunk);
     }
     return doOverlapAdd(chunks);
 }
@@ -162,9 +179,12 @@ void SeparationWorker::processFile(const QStringList& filePaths, const QString& 
 void SeparationWorker::processSingleFile(const QString& audioPath, const QString& featureName)
 {
     ZeroShotASPFeatureExtractor extractor;
-    if (!extractor.loadModel(Constants::ZERO_SHOT_ASP_MODEL_PATH)) {
-        emit error("Failed to load separation model");
-        return;
+    if (!extractor.loadModelFromResource(Constants::ZERO_SHOT_ASP_MODEL_RESOURCE)) {
+        qDebug() << "Failed to load ZeroShotASP model from resource, trying absolute path...";
+        if (!extractor.loadModel(Constants::ZERO_SHOT_ASP_MODEL_PATH)) {
+            emit error("Failed to load separation model");
+            return;
+        }
     }
 
     QFileInfo audioFileInfo(audioPath);
@@ -182,15 +202,13 @@ void SeparationWorker::processSingleFile(const QString& audioPath, const QString
     }
 
     // Load audio waveform tensor from file (assumed to be WAV)
-    torch::Tensor rawAudio = AudioPreprocessUtils::loadAudio(audioPath);
-    if (rawAudio.numel() == 0) {
+    torch::Tensor waveform = AudioPreprocessUtils::loadAudio(audioPath);
+    if (waveform.numel() == 0) {
         emit error(QString("Failed to load audio waveform from: %1").arg(audioPath));
         return;
     }
 
-    // Convert to mono and flatten to 1D
-    torch::Tensor monoAudio = AudioPreprocessUtils::convertToMono(rawAudio, rawAudio.size(1));
-    torch::Tensor waveform = monoAudio.flatten();
+    AudioPreprocessUtils::saveToWav(waveform, Constants::TEMP_SEGMENTS_DIR + "/mono.wav");
 
     if (waveform.dim() != 1) {
         emit error("Loaded waveform tensor must be 1D");
@@ -248,11 +266,16 @@ void SeparationWorker::processSingleFile(const QString& audioPath, const QString
     extractor.unloadModel();
 
     // Load chunk files and do overlap-add incrementally
-    torch::Tensor finalTensor = doOverlapAdd(chunkFilePaths);
-    if (!finalTensor.defined() || finalTensor.numel() == 0) {
-        emit error("Overlap-add failed");
+    try {
+        torch::Tensor finalTensor = doOverlapAdd(chunkFilePaths);
+        if (!finalTensor.defined() || finalTensor.numel() == 0) {
+            emit error("Overlap-add failed");
+            return;
+        }
+
+        emit separationFinished(audioPath, featureName, finalTensor);
+    } catch (const c10::Error& e) {
+        emit error(QString("Final overlap-add error: %1").arg(e.what()));
         return;
     }
-
-    emit separationFinished(audioPath, featureName, finalTensor);
 }

@@ -2,6 +2,8 @@
 #include "zero_shot_asp_feature_extractor.h"
 #include <QFileInfo>
 #include <torch/script.h>
+#include <QResource>
+#include <QTemporaryFile>
 
 ZeroShotASPFeatureExtractor::ZeroShotASPFeatureExtractor(QObject* parent)
     : QObject(parent), modelLoaded(false)
@@ -61,4 +63,53 @@ void ZeroShotASPFeatureExtractor::unloadModel()
 {
     model = torch::jit::script::Module();
     modelLoaded = false;
+}
+
+bool ZeroShotASPFeatureExtractor::loadModelFromResource(const QString& resourcePath)
+{
+    QResource resource(resourcePath);
+    if (!resource.isValid()) {
+        emit error("Invalid resource path: " + resourcePath);
+        return false;
+    }
+
+    QTemporaryFile tempFile;
+    tempFile.setAutoRemove(false);
+    
+    if (!tempFile.open()) {
+        emit error("Failed to create temporary file for model");
+        return false;
+    }
+
+    QByteArray data = resource.uncompressedData();
+    if (data.isEmpty()) {
+        emit error("Resource data is empty");
+        return false;
+    }
+
+    qint64 bytesWritten = tempFile.write(data);
+    if (bytesWritten != data.size()) {
+        emit error("Failed to write complete model data to temporary file");
+        tempFile.close();
+        return false;
+    }
+
+    tempFile.close();
+
+    try {
+        model = torch::jit::load(tempFile.fileName().toStdString());
+        modelLoaded = true;
+        
+        QFile::remove(tempFile.fileName());
+        
+        qDebug() << "Successfully loaded ZeroShotASP model from resource:" << resourcePath;
+        return true;
+    } catch (const c10::Error& e) {
+        emit error("Failed to load model: " + QString::fromStdString(e.what()));
+        modelLoaded = false;
+        
+        QFile::remove(tempFile.fileName());
+        
+        return false;
+    }
 }

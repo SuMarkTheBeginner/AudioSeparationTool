@@ -1,6 +1,8 @@
 #include "mainwindow.h"
 #include "fileutils.h"
+#include "constants.h"
 #include <QMessageBox>
+#include <QTimer>
 
 /**
  * @brief Constructs the MainWindow and initializes the UI.
@@ -45,10 +47,11 @@ void MainWindow::setupUI()
 
     // Global progress bar fixed at the bottom
     globalProgressBar = new QProgressBar(this);
-    globalProgressBar->setRange(0, 100);
+    globalProgressBar->setRange(Constants::PROGRESS_RANGE_MIN, Constants::PROGRESS_RANGE_MAX);
     globalProgressBar->setValue(0);
-    globalProgressBar->setTextVisible(false); // Hide percentage text
-    globalProgressBar->setFixedHeight(18);    // Custom height
+    globalProgressBar->setTextVisible(false); // Hide percentage text initially
+    globalProgressBar->setFixedHeight(Constants::PROGRESS_BAR_HEIGHT);
+    globalProgressBar->setVisible(false);     // Hidden by default
     mainVLayout->addWidget(globalProgressBar);
 
     centralWidgetContainer->setLayout(mainVLayout);
@@ -133,8 +136,11 @@ void MainWindow::setupConnections()
     connect(rm, &ResourceManager::fileRemoved, this, &MainWindow::onFileRemoved);
     connect(rm, &ResourceManager::folderRemoved, this, &MainWindow::onFolderRemoved);
 
-    // Connect progressUpdated signal to updateProgress slot
-    connect(rm, &ResourceManager::progressUpdated, this, &MainWindow::updateProgress);
+    // Connect progress signals to handle progress bar visibility and updates
+    connect(rm, &ResourceManager::processingStarted, this, &MainWindow::onProcessingStarted);
+    connect(rm, &ResourceManager::processingProgress, this, &MainWindow::updateProgress);
+    connect(rm, &ResourceManager::processingFinished, this, &MainWindow::onProcessingFinished);
+    connect(rm, &ResourceManager::processingError, this, &MainWindow::onProcessingError);
 
     // Connect playRequested from AddSoundFeatureWidget
     connect(addSoundFeatureWidget, &AddSoundFeatureWidget::playRequested, this, &MainWindow::onPlayRequested);
@@ -178,6 +184,11 @@ void MainWindow::showUseFeature()
 void MainWindow::updateProgress(int value)
 {
     globalProgressBar->setValue(value);
+    // Ensure progress bar remains visible and text is shown during updates
+    if (!globalProgressBar->isVisible()) {
+        globalProgressBar->setVisible(true);
+        globalProgressBar->setTextVisible(true);
+    }
 }
 
 /**
@@ -238,8 +249,51 @@ void MainWindow::onFolderRemoved(const QString& folderPath, ResourceManager::Fil
             }
         }
         // Also unlock the folder itself if it was set
-        if (!FileUtils::setFileReadOnly(folderPath, false)) {
+        if (FileUtils::setFileReadOnly(folderPath, false) != FileUtils::FileOperationResult::Success) {
             // Ignore if fails, as folder might not be set
         }
     }
+}
+
+/**
+ * @brief Slot to handle processing started.
+ */
+void MainWindow::onProcessingStarted()
+{
+    globalProgressBar->setValue(0);
+    globalProgressBar->setVisible(true);
+    globalProgressBar->setTextVisible(true);
+    globalProgressBar->setFormat("Processing... %p%");
+}
+
+
+/**
+ * @brief Slot to handle processing finished.
+ * @param results List of result file paths.
+ */
+void MainWindow::onProcessingFinished(const QStringList& results)
+{
+    globalProgressBar->setValue(100);
+    globalProgressBar->setFormat("Completed! %p%");
+    // Hide progress bar after a short delay to show completion
+    QTimer::singleShot(2000, this, [this]() {
+        globalProgressBar->setVisible(false);
+        globalProgressBar->setTextVisible(false);
+    });
+}
+
+/**
+ * @brief Slot to handle processing error.
+ * @param error Error message.
+ */
+void MainWindow::onProcessingError(const QString& error)
+{
+    globalProgressBar->setValue(100);
+    globalProgressBar->setFormat("Error! %p%");
+    // Hide progress bar after showing error briefly
+    QTimer::singleShot(3000, this, [this]() {
+        globalProgressBar->setVisible(false);
+        globalProgressBar->setTextVisible(false);
+    });
+    QMessageBox::critical(this, "Processing Error", error);
 }

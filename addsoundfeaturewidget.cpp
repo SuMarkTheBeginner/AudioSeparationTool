@@ -21,6 +21,15 @@ AddSoundFeatureWidget::AddSoundFeatureWidget(QWidget *parent)
     setupCommonUI(Constants::SELECT_WAV_FOLDERS_TEXT, "Select Folder", "Select WAV Files");
     setupFeatureInputUI();
     setupFeatureButtonConnections();
+
+    // Connect to ResourceManager processing signals to disable/enable createFeatureBtn
+    ResourceManager* rm = ResourceManager::instance();
+    connect(rm, &ResourceManager::processingStarted, this, [this]() {
+        createFeatureBtn->setEnabled(false);
+    });
+    connect(rm, &ResourceManager::processingFinished, this, [this]() {
+        createFeatureBtn->setEnabled(true);
+    });
 }
 
 
@@ -90,16 +99,6 @@ void AddSoundFeatureWidget::setupFeatureButtonConnections()
         ResourceManager::instance()->startGenerateAudioFeatures(selectedFiles, outputFileName);
     });
 }
-
-
-
-
-
-
-
-
-
-
 
 /**
  * @brief Sorts all folders and single files based on the specified type.

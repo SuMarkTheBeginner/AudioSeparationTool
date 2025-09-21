@@ -83,6 +83,12 @@
     "format": "cpp",
     "__nullptr": "cpp",
     "qmetaobject": "cpp",
-    "qfiledialog": "cpp"
+    "qfiledialog": "cpp",
+    "qtoolbutton": "cpp",
+    "qevent": "cpp",
+    "qtimer": "cpp",
+    "qurl": "cpp",
+    "qdragenterevent": "cpp",
+    "qmimedata": "cpp"
   }
 }

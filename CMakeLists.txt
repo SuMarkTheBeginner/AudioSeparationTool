@@ -49,6 +49,7 @@ endif()
 message(STATUS "Extract and update this path:")
 
 set(LIBTORCH_PATHS
+    "/home/mark/libtorch-cpu"
     "$ENV{HOME}/libtorch"
 )
 
@@ -116,6 +117,7 @@ set(PROJECT_SOURCES
         htsatworker.h htsatworker.cpp
         separationworker.h separationworker.cpp
         audio_preprocess_utils.h audio_preprocess_utils.cpp
+        # models.qrc  # Commented out - models are too large for Qt resource compiler
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
@@ -124,7 +126,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         ${PROJECT_SOURCES}
         resourcemanager.h resourcemanager.cpp
         audioplayer.h audioplayer.cpp
-        #models.qrc
+        # models.qrc  # Commented out - models are too large for Qt resource compiler
     )
     qt_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TS_FILES})
 else()
@@ -155,9 +157,9 @@ if(HAS_MULTIMEDIA)
     target_compile_definitions(AudioSeparationTool PRIVATE HAS_MULTIMEDIA)
 endif()
 
-# 🔹 啟用 AddressSanitizer (ASan)
-target_compile_options(AudioSeparationTool PRIVATE -fsanitize=address -g)
-target_link_options(AudioSeparationTool PRIVATE -fsanitize=address)
+# 🔹 啟用 AddressSanitizer (ASan) - Disabled
+# target_compile_options(AudioSeparationTool PRIVATE -fsanitize=address -g)
+# target_link_options(AudioSeparationTool PRIVATE -fsanitize=address)
 
 # 避免 LibTorch 一些標準差異警告
 set_property(TARGET AudioSeparationTool PROPERTY CXX_STANDARD 17)
