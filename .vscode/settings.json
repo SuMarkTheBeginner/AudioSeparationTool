@@ -89,6 +89,7 @@
     "qtimer": "cpp",
     "qurl": "cpp",
     "qdragenterevent": "cpp",
-    "qmimedata": "cpp"
+    "qmimedata": "cpp",
+    "qtemporaryfile": "cpp"
   }
 }

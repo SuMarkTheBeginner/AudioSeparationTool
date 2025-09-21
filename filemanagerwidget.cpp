@@ -42,6 +42,7 @@ void FileManagerWidget::setupCommonUI(const QString& instructionText, const QStr
 
     QWidget* mainContainer = new QWidget(scrollArea);
     QVBoxLayout* mainLayout = new QVBoxLayout(mainContainer);
+    mainLayout->setAlignment(Qt::AlignTop); // Align content to top
 
     // Folder section
     folderContainer = new QWidget(mainContainer);
@@ -50,7 +51,6 @@ void FileManagerWidget::setupCommonUI(const QString& instructionText, const QStr
     folderLayout->setSpacing(0);
     folderLayout->setContentsMargins(0, 0, 0, 0);
     folderContainer->setLayout(folderLayout);
-    // Set size policy and minimum height to avoid initial vertical space but keep width
     folderContainer->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
     folderContainer->setMinimumHeight(0);
     mainLayout->addWidget(folderContainer);
@@ -188,6 +188,9 @@ void FileManagerWidget::addFolder(const QString& folderPath)
         connect(folderWidget, &FolderWidget::playRequested, this, [this](const QString& path){
             emit playRequested(path);
         });
+
+        // Adjust folder container size to fit content
+        folderContainer->adjustSize();
     }
 }
 

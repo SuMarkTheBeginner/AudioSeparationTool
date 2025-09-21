@@ -106,6 +106,7 @@ signals:
     void processingStarted();
     void processingProgress(int value);
     void processingFinished(const QStringList& results);
+    void separationProcessingFinished(const QStringList& results);
     void processingError(const QString& error);
     void startHTSATProcessing(const QStringList& filePaths, const QString& outputFileName);
     void startSeparationProcessing(const QStringList& filePaths, const QString& featureName);

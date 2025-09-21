@@ -74,12 +74,21 @@ ResourceManager::ResourceManager(QObject* parent)
     connect(this, &ResourceManager::startSeparationProcessing, separationWorker, &SeparationWorker::processFile);
     connect(separationWorker, &SeparationWorker::progressUpdated, this, &ResourceManager::processingProgress);
     connect(separationWorker, &SeparationWorker::chunkReady, this, &ResourceManager::handleChunk);
-    connect(separationWorker, &SeparationWorker::separationFinished, this, &ResourceManager::handleFinalResult);
+connect(separationWorker, &SeparationWorker::separationFinished, this, &ResourceManager::handleFinalResult);
 
-    connect(separationWorker, &SeparationWorker::error, this, [this](const QString& error){
-        m_isProcessing = false;
-        emit processingError(error);
-    });
+connect(separationWorker, &SeparationWorker::separationFinished, this, [this](const QString& audioPath){
+    m_isProcessing = false;
+    QStringList results;
+    QString outputName = QFileInfo(audioPath).baseName() + "_separated.wav";
+    QString outputPath = Constants::SEPARATED_RESULT_DIR + "/" + outputName;
+    results << outputPath;
+    emit separationProcessingFinished(results);
+});
+
+connect(separationWorker, &SeparationWorker::error, this, [this](const QString& error){
+    m_isProcessing = false;
+    emit processingError(error);
+});
 
     separationThread->start();
     

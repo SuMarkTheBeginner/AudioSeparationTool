@@ -20,6 +20,7 @@ UseFeatureWidget::UseFeatureWidget(QWidget *parent)
     // Connect processing signals once here
     connect(rm, &ResourceManager::processingProgress, this, &UseFeatureWidget::onProcessingProgress);
     connect(rm, &ResourceManager::processingFinished, this, &UseFeatureWidget::onProcessingFinished);
+    connect(rm, &ResourceManager::separationProcessingFinished, this, &UseFeatureWidget::onSeparationProcessingFinished);
 }
 
 void UseFeatureWidget::setupUI()
@@ -279,12 +280,8 @@ void UseFeatureWidget::onProcessingProgress(int value)
 
 void UseFeatureWidget::onProcessingFinished(const QStringList& results)
 {
-    ResourceManager* rm = ResourceManager::instance();
-
-    // Add results to the list
-    for (const QString& result : results) {
-        resultList->addItem(result);
-    }
+    // This slot handles create feature processing finished
+    // We do not add create feature results to resultList as per user request
 
     // Re-enable process button
     processButton->setEnabled(true);
@@ -293,6 +290,21 @@ void UseFeatureWidget::onProcessingFinished(const QStringList& results)
     loadFeatures();
 
     resultLabel->setText("Processing finished.");
+}
+
+void UseFeatureWidget::onSeparationProcessingFinished(const QStringList& results)
+{
+    // This slot handles separation processing finished
+    // Add separation results to the resultList
+
+    for (const QString& result : results) {
+        resultList->addItem(result);
+    }
+
+    // Re-enable process button
+    processButton->setEnabled(true);
+
+    resultLabel->setText("Separation processing finished.");
 }
 
 void UseFeatureWidget::onDeleteClicked()

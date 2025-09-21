@@ -61,8 +61,12 @@ private slots:
     void onProcessingProgress(int value);     ///< Handles processing progress updates
     void onProcessingFinished(const QStringList& results); ///< Handles processing completion
 
+
 signals:
     void playRequested(const QString& filePath); ///< Signal emitted when play is requested
+
+private slots:
+    void onSeparationProcessingFinished(const QStringList& results); ///< Handles separation processing completion
 };
 
 
