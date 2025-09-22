@@ -1,7 +1,7 @@
-<!DOCTYPE RCC>
-<RCC version="1.0">
-<qresource>
-    <file>models/htsat_embedding_model.pt</file>
-    <file>models/zero_shot_asp_separation_model.pt</file>
-</qresource>
+<RCC>
+    <qresource prefix="/">
+        <file>models/test.txt</file>
+        <file>models/htsat_embedding_model.pt</file>
+        <file>models/zero_shot_asp_separation_model.pt</file>
+    </qresource>
 </RCC>

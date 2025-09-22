@@ -61,8 +61,8 @@ const QString SEPARATED_RESULT_DIR = "separated_results";     // Separation resu
 const QString TEMP_SEGMENTS_DIR = "temp_chunks";             // Temporary chunks during processing
 
 // Model file paths (absolute paths for development)
-const QString HTSAT_MODEL_PATH = "/home/mark/AudioSeparationTool/models/htsat_embedding_model.pt";              // HTSAT model folder
-const QString ZERO_SHOT_ASP_MODEL_PATH = "/home/mark/AudioSeparationTool/models/zero_shot_asp_separation_model.pt"; // ZeroShotASP model file
+const QString HTSAT_MODEL_PATH = "C:/Users/aaa09/Desktop/Project/AudioSeparationTool_Windows/AudioSeparationTool/models/htsat_embedding_model.pt";              // HTSAT model folder
+const QString ZERO_SHOT_ASP_MODEL_PATH = "C:/Users/aaa09/Desktop/Project/AudioSeparationTool_Windows/AudioSeparationTool/models/zero_shot_asp_separation_model.pt"; // ZeroShotASP model file
 
 // Model resource paths (for embedded models)
 const QString HTSAT_MODEL_RESOURCE = ":/models/htsat_embedding_model.pt";              // HTSAT model resource path

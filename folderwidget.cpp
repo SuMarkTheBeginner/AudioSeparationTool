@@ -73,7 +73,7 @@ void FolderWidget::setupUI()
     mainLayout->addWidget(folderPathLabel);
 
     // Interaction logic for folder checkbox
-    connect(folderCheckBox, QOverload<int>::of(&QCheckBox::stateChanged), this, [this](int state) {
+    connect(folderCheckBox, &QCheckBox::checkStateChanged, this, [this](Qt::CheckState state) {
         if (m_updatingCheckStates) return;
         m_updatingCheckStates = true;
         if (state == Qt::Checked) {
@@ -99,7 +99,7 @@ void FolderWidget::setupUI()
     });
 
     for (WideCheckBox* cb : filesCheckBoxes) {
-        connect(cb, &QCheckBox::stateChanged, this, &FolderWidget::refreshFolderCheckState);
+        connect(cb, &QCheckBox::checkStateChanged, this, &FolderWidget::refreshFolderCheckState);
     }
 
     connect(removeFolderBtn, &QPushButton::clicked, this, [this]() {
@@ -177,7 +177,7 @@ void FolderWidget::addFilesInternal(const QStringList& files)
         filesLayout->addWidget(fileItemWidget);
         filesCheckBoxes.append(cb);
 
-        connect(cb, &QCheckBox::stateChanged, this, &FolderWidget::refreshFolderCheckState);
+        connect(cb, &QCheckBox::checkStateChanged, this, &FolderWidget::refreshFolderCheckState);
         connect(removeBtn, &QPushButton::clicked, this, [this, f, fileItemWidget]() {
             filesLayout->removeWidget(fileItemWidget);
             fileItemWidget->deleteLater();

@@ -1,8 +1,8 @@
 #include "audioplayer.h"
 #include <QMessageBox>
-#ifdef HAS_MULTIMEDIA
 #include <QUrl>
 
+#ifdef HAS_MULTIMEDIA
 /**
  * @brief Constructs the AudioPlayer.
  * @param parent The parent widget.
@@ -59,19 +59,8 @@ void AudioPlayer::setupUI()
  */
 void AudioPlayer::playAudio(const QString& filePath)
 {
-#ifdef HAS_MULTIMEDIA
     mediaPlayer->setSource(QUrl::fromLocalFile(filePath));
     mediaPlayer->play();
-#else
-    // Show a message when multimedia is not available
-    QMessageBox::information(this, "Audio Playback Not Available",
-        "Audio playback is not available because Qt Multimedia is not installed or not found.\n\n"
-        "To enable audio playback, please install Qt Multimedia:\n"
-        "  - On Ubuntu/Debian: sudo apt-get install qtmultimedia5-dev\n"
-        "  - On Fedora/CentOS: sudo dnf install qt5-qtmultimedia-devel\n"
-        "  - On macOS: brew install qt@5\n"
-        "Then rebuild the application.");
-#endif
 }
 
 /**
@@ -187,39 +176,39 @@ void AudioPlayer::onErrorOccurred(QMediaPlayer::Error error, const QString& erro
         return; // No error, nothing to do
     case QMediaPlayer::ResourceError:
         errorMessage = "Resource error: " + errorString + "\n\n"
-                      "This usually means the audio file could not be loaded or accessed.";
+                                                          "This usually means the audio file could not be loaded or accessed.";
         break;
     case QMediaPlayer::FormatError:
         errorMessage = "Format error: " + errorString + "\n\n"
-                      "This usually means the audio format is not supported. "
-                      "For WAV files, ensure you have the necessary multimedia codecs installed.\n\n"
-                      "On Ubuntu/Debian: sudo apt-get install libqt5multimedia5-plugins\n"
-                      "On Fedora/CentOS: sudo dnf install qt5-qtmultimedia\n"
-                      "On Windows: Qt Multimedia plugins should be included with Qt installation.\n\n"
-                      "Note: If you're running in WSL (Windows Subsystem for Linux), audio playback "
-                      "may not work due to limited multimedia support. Consider:\n"
-                      "1. Running the application natively on Windows\n"
-                      "2. Using X11 forwarding with audio support\n"
-                      "3. Installing PulseAudio in WSL: sudo apt-get install pulseaudio";
+                                                        "This usually means the audio format is not supported. "
+                                                        "For WAV files, ensure you have the necessary multimedia codecs installed.\n\n"
+                                                        "On Ubuntu/Debian: sudo apt-get install libqt5multimedia5-plugins\n"
+                                                        "On Fedora/CentOS: sudo dnf install qt5-qtmultimedia\n"
+                                                        "On Windows: Qt Multimedia plugins should be included with Qt installation.\n\n"
+                                                        "Note: If you're running in WSL (Windows Subsystem for Linux), audio playback "
+                                                        "may not work due to limited multimedia support. Consider:\n"
+                                                        "1. Running the application natively on Windows\n"
+                                                        "2. Using X11 forwarding with audio support\n"
+                                                        "3. Installing PulseAudio in WSL: sudo apt-get install pulseaudio";
         break;
     case QMediaPlayer::NetworkError:
         errorMessage = "Network error: " + errorString;
         break;
     case QMediaPlayer::AccessDeniedError:
         errorMessage = "Access denied: " + errorString + "\n\n"
-                      "Check file permissions and ensure the audio file is readable.";
+                                                         "Check file permissions and ensure the audio file is readable.";
         break;
     default:
         errorMessage = "Playback error: " + errorString + "\n\n"
-                      "This could be due to missing multimedia codecs or plugins. "
-                      "For WAV files, ensure you have the necessary multimedia codecs installed.\n\n"
-                      "On Ubuntu/Debian: sudo apt-get install libqt5multimedia5-plugins\n"
-                      "On Fedora/CentOS: sudo dnf install qt5-qtmultimedia\n"
-                      "On Windows: Qt Multimedia plugins should be included with Qt installation.\n\n"
-                      "If you're running in WSL (Windows Subsystem for Linux):\n"
-                      "- Audio playback has limited support in WSL\n"
-                      "- Consider running the application natively on Windows\n"
-                      "- Or use X11 forwarding with proper audio configuration";
+                                                          "This could be due to missing multimedia codecs or plugins. "
+                                                          "For WAV files, ensure you have the necessary multimedia codecs installed.\n\n"
+                                                          "On Ubuntu/Debian: sudo apt-get install libqt5multimedia5-plugins\n"
+                                                          "On Fedora/CentOS: sudo dnf install qt5-qtmultimedia\n"
+                                                          "On Windows: Qt Multimedia plugins should be included with Qt installation.\n\n"
+                                                          "If you're running in WSL (Windows Subsystem for Linux):\n"
+                                                          "- Audio playback has limited support in WSL\n"
+                                                          "- Consider running the application natively on Windows\n"
+                                                          "- Or use X11 forwarding with proper audio configuration";
         break;
     }
 
@@ -239,5 +228,58 @@ QString AudioPlayer::formatTime(qint64 ms) const
     return QString("%1:%2").arg(minutes, 2, 10, QChar('0')).arg(seconds, 2, 10, QChar('0'));
 }
 #else
-AudioPlayer::AudioPlayer(QWidget* parent) : QWidget(parent) {}
+/**
+ * @brief Constructs the AudioPlayer (stub for when Qt Multimedia is not available).
+ * @param parent The parent widget.
+ */
+AudioPlayer::AudioPlayer(QWidget* parent) : QWidget(parent)
+{
+    QMessageBox::information(this, "Audio Playback Not Available",
+                             "Audio playback is not available because Qt Multimedia is not installed or not found.\n\n"
+                             "To enable audio playback, please install Qt Multimedia:\n"
+                             "  - On Ubuntu/Debian: sudo apt-get install qtmultimedia5-dev\n"
+                             "  - On Fedora/CentOS: sudo dnf install qt5-qtmultimedia-devel\n"
+                             "  - On macOS: brew install qt@5\n"
+                             "Then rebuild the application.");
+}
+
+/**
+ * @brief Stub for playAudio when Qt Multimedia is not available.
+ * @param filePath Path to the audio file.
+ */
+void AudioPlayer::playAudio(const QString& filePath)
+{
+    Q_UNUSED(filePath);
+    QMessageBox::information(this, "Audio Playback Not Available",
+                             "Audio playback is not supported without Qt Multimedia.");
+}
+
+/**
+ * @brief Stub for pauseAudio when Qt Multimedia is not available.
+ */
+void AudioPlayer::pauseAudio()
+{
+    QMessageBox::information(this, "Audio Playback Not Available",
+                             "Audio playback is not supported without Qt Multimedia.");
+}
+
+/**
+ * @brief Stub for stopAudio when Qt Multimedia is not available.
+ */
+void AudioPlayer::stopAudio()
+{
+    QMessageBox::information(this, "Audio Playback Not Available",
+                             "Audio playback is not supported without Qt Multimedia.");
+}
+
+/**
+ * @brief Stub for seekAudio when Qt Multimedia is not available.
+ * @param position Position in milliseconds.
+ */
+void AudioPlayer::seekAudio(qint64 position)
+{
+    Q_UNUSED(position);
+    QMessageBox::information(this, "Audio Playback Not Available",
+                             "Audio playback is not supported without Qt Multimedia.");
+}
 #endif
