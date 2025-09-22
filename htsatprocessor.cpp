@@ -10,6 +10,8 @@
 #include <sndfile.h>
 #include <samplerate.h>
 
+#include <QDir>
+
 /**
  * @brief Constructs the HTSATProcessor.
  * @param parent The parent QObject (default is nullptr).
@@ -26,14 +28,33 @@ HTSATProcessor::HTSATProcessor(QObject *parent)
  */
 bool HTSATProcessor::loadModel(const QString& modelPath)
 {
+    // 轉成 native Windows 路徑（反斜線）
+    QString nativePath = QDir::toNativeSeparators(modelPath);
+
+    // 用 UTF-8 輸出路徑字串，避免編碼錯誤
+    std::string utf8Path = nativePath.toUtf8().constData();
+
+    // Debug 確認
+    qDebug() << "Trying to load model from:" << nativePath;
+
+    // 用 ifstream 開啟檔案 (binary mode)
+    std::ifstream f(utf8Path, std::ios::binary);
+    if (!f.is_open()) {
+        qDebug() << "Model file not found or cannot open:" << nativePath;
+        return false;
+    }
+
     try {
-        model = torch::jit::load(modelPath.toStdString());
+        model = torch::jit::load(f);
         model.eval();
         modelLoaded = true;
+        qDebug() << "Model loaded successfully!";
         return true;
     } catch (const c10::Error& e) {
         emit errorOccurred(QString("Error loading model: %1").arg(e.what()));
+        qDebug() << "Error loading model:" << e.what();
         modelLoaded = false;
+        return false;
     }
 }
 
@@ -53,7 +74,16 @@ std::vector<float> HTSATProcessor::processTensor(const torch::Tensor& audioTenso
     // Enhanced logging for debugging
     qDebug() << "HTSATProcessor::processTensor - Input tensor info:";
     qDebug() << "  - Shape: [" << audioTensor.size(0) << "," << audioTensor.size(1) << "]";
-    qDebug() << "  - Dtype:" << QString::fromStdString(std::string(audioTensor.dtype().name()));
+    auto dtype = audioTensor.dtype();
+    QString dtypeName;
+
+    if (dtype == torch::kFloat32) dtypeName = "float32";
+    else if (dtype == torch::kFloat64) dtypeName = "float64";
+    else if (dtype == torch::kInt32) dtypeName = "int32";
+    else if (dtype == torch::kInt64) dtypeName = "int64";
+    else dtypeName = "unknown";
+
+    qDebug() << "  - Dtype:" << dtypeName;
     c10::DeviceType dev_type = audioTensor.device().type();
     QString dev_name = QString::fromStdString(c10::DeviceTypeName(dev_type));
     qDebug() << "  - Device:" << dev_name;
