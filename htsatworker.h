@@ -1,31 +1,22 @@
 #ifndef HTSATWORKER_H
 #define HTSATWORKER_H
 
-#include <QObject>
 #include <QStringList>
 #include <QVector>
 #include <vector>
 #include "htsatprocessor.h"
 
-class HTSATWorker : public QObject
+class HTSATWorker
 {
-    Q_OBJECT
-
 public:
-    explicit HTSATWorker(QObject *parent = nullptr);
-    
+    explicit HTSATWorker();
+    ~HTSATWorker();
 
-public slots:
-    void generateFeatures(const QStringList& filePaths, const QString& outputFileName);
-    
-
-signals:
-    void progressUpdated(int value);
-    void finished(const std::vector<float>& avgEmb, const QString& outputFileName);
-    void error(const QString& errorMessage);
+    // Synchronous method to generate features
+    std::vector<float> generateFeatures(const QStringList& filePaths);
 
 private:
-    std::vector<float> doGenerateAudioFeatures(const QStringList& filePaths, const QString& outputFileName);
+    std::vector<float> doGenerateAudioFeatures(const QStringList& filePaths);
     QVector<std::vector<float>> processFilesAndCollectEmbeddings(const QStringList& filePaths, HTSATProcessor* processor);
     std::vector<float> computeAverageEmbedding(const QVector<std::vector<float>>& embeddings);
 };

@@ -58,10 +58,10 @@ public:
     QMap<QString, FileWidget*> getSingleFiles(FileType type = FileType::WavForFeature) const;
 
     // =========================
-    // Audio / Feature Processing
+    // Audio / Feature Processing (Synchronous)
     // =========================
-    void startGenerateAudioFeatures(const QStringList& filePaths, const QString& outputFileName); // Async HTSAT
-    void startSeparateAudio(const QStringList& filePaths, const QString& featureName);         // Async separation
+    void startGenerateAudioFeatures(const QStringList& filePaths, const QString& outputFileName); // Synchronous HTSAT
+    void startSeparateAudio(const QStringList& filePaths, const QString& featureName);         // Synchronous separation
 
     // =========================
     // File saving interfaces for workers
@@ -102,14 +102,12 @@ signals:
     void progressUpdated(int value);
     void featuresUpdated();
 
-    // Async processing
+    // Synchronous processing
     void processingStarted();
     void processingProgress(int value);
     void processingFinished(const QStringList& results);
     void separationProcessingFinished(const QStringList& results);
     void processingError(const QString& error);
-    void startHTSATProcessing(const QStringList& filePaths, const QString& outputFileName);
-    void startSeparationProcessing(const QStringList& filePaths, const QString& featureName);
 
 private:
     // Singleton pattern
@@ -133,15 +131,6 @@ private:
     void emitFileRemoved(const QString& path, FileType type);
     void emitFolderAdded(const QString& folderPath, FileType type);
     void emitFolderRemoved(const QString& folderPath, FileType type);
-
-    void handleChunk(const QString& audioPath,
-                 const QString& featureName,
-                 const torch::Tensor& chunkData);
-
-                 // 接收單檔案最終結果
-    void handleFinalResult(const QString& audioPath,
-                       const QString& featureName,
-                       const torch::Tensor& finalTensor);
 
 };
 

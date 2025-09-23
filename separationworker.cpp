@@ -9,10 +9,13 @@
 #include <cmath>
 #include "audio_preprocess_utils.h"
 
-SeparationWorker::SeparationWorker(QObject* parent)
-    : QObject(parent),
-      overlapRate(Constants::AUDIO_OVERLAP_RATE),
+SeparationWorker::SeparationWorker()
+    : overlapRate(Constants::AUDIO_OVERLAP_RATE),
       clipSamples(Constants::AUDIO_CLIP_SAMPLES)
+{
+}
+
+SeparationWorker::~SeparationWorker()
 {
 }
 
@@ -20,13 +23,13 @@ torch::Tensor SeparationWorker::loadFeature(const QString& featurePath)
 {
     QFileInfo fi(featurePath);
     if (!fi.exists() || !fi.isReadable()) {
-        emit error(QString("Feature file does not exist or is not readable: %1").arg(featurePath));
+        qDebug() << "Feature file does not exist or is not readable:" << featurePath;
         return torch::Tensor();
     }
 
     QFile file(featurePath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        emit error(QString("Failed to open feature file: %1").arg(featurePath));
+        qDebug() << "Failed to open feature file:" << featurePath;
         return torch::Tensor();
     }
 
@@ -40,14 +43,14 @@ torch::Tensor SeparationWorker::loadFeature(const QString& featurePath)
     for (const QString& part : parts) {
         float val = part.toFloat(&ok);
         if (!ok) {
-            emit error(QString("Invalid float value in feature file: %1").arg(part));
+            qDebug() << "Invalid float value in feature file:" << part;
             return torch::Tensor();
         }
         values.push_back(val);
     }
 
     if (values.empty()) {
-        emit error("Feature file is empty or invalid format");
+        qDebug() << "Feature file is empty or invalid format";
         return torch::Tensor();
     }
 
@@ -61,17 +64,17 @@ torch::Tensor SeparationWorker::processChunk(const torch::Tensor& waveform,
                                              ZeroShotASPFeatureExtractor* extractor)
 {
     if (!extractor) {
-        emit error("Extractor is not initialized");
+        qDebug() << "Extractor is not initialized";
         return torch::Tensor();
     }
 
     if (waveform.dim() != 3 || waveform.size(0) != 1 || waveform.size(2) != 1 || waveform.size(1) != clipSamples) {
-        emit error("Invalid waveform shape for processChunk");
+        qDebug() << "Invalid waveform shape for processChunk";
         return torch::Tensor();
     }
 
     if (condition.dim() != 2 || condition.size(0) != 1) {
-        emit error("Invalid condition shape for processChunk");
+        qDebug() << "Invalid condition shape for processChunk";
         return torch::Tensor();
     }
 
@@ -79,7 +82,7 @@ torch::Tensor SeparationWorker::processChunk(const torch::Tensor& waveform,
         torch::Tensor output = extractor->forward(waveform, condition);
         return output;
     } catch (const c10::Error& e) {
-        emit error(QString("Extractor forward error: %1").arg(e.what()));
+        qDebug() << "Extractor forward error:" << e.what();
         return torch::Tensor();
     }
 }
@@ -87,7 +90,7 @@ torch::Tensor SeparationWorker::processChunk(const torch::Tensor& waveform,
 torch::Tensor SeparationWorker::doOverlapAdd(const std::vector<torch::Tensor>& chunks)
 {
     if (chunks.empty()) {
-        emit error("No chunks to overlap-add");
+        qDebug() << "No chunks to overlap-add";
         return torch::Tensor();
     }
 
@@ -105,7 +108,7 @@ torch::Tensor SeparationWorker::doOverlapAdd(const std::vector<torch::Tensor>& c
             int64_t end = start + chunkSize;
 
             if (chunk.size(1) != chunkSize) {
-                emit error("Chunk size mismatch in doOverlapAdd");
+                qDebug() << "Chunk size mismatch in doOverlapAdd";
                 return torch::Tensor();
             }
 
@@ -143,7 +146,7 @@ torch::Tensor SeparationWorker::doOverlapAdd(const std::vector<torch::Tensor>& c
 
         return output;
     } catch (const c10::Error& e) {
-        emit error(QString("Overlap-add error: %1").arg(e.what()));
+        qDebug() << "Overlap-add error:" << e.what();
         return torch::Tensor();
     }
 }
@@ -154,7 +157,7 @@ torch::Tensor SeparationWorker::doOverlapAdd(const QStringList& chunkFilePaths)
     for (const QString& path : chunkFilePaths) {
     torch::Tensor chunk = AudioPreprocessUtils::loadAudio(path); // 1D (frames,)
     if (chunk.numel() == 0) {
-        emit error(QString("Failed to load chunk from: %1").arg(path));
+        qDebug() << "Failed to load chunk from:" << path;
         return torch::Tensor();
     }
 
@@ -182,14 +185,14 @@ void SeparationWorker::processSingleFile(const QString& audioPath, const QString
     if (!extractor.loadModelFromResource(Constants::ZERO_SHOT_ASP_MODEL_RESOURCE)) {
         qDebug() << "Failed to load ZeroShotASP model from resource, trying absolute path...";
         if (!extractor.loadModel(Constants::ZERO_SHOT_ASP_MODEL_PATH)) {
-            emit error("Failed to load separation model");
+            qDebug() << "Failed to load separation model";
             return;
         }
     }
 
     QFileInfo audioFileInfo(audioPath);
     if (!audioFileInfo.exists() || !audioFileInfo.isReadable()) {
-        emit error(QString("Audio file does not exist or is not readable: %1").arg(audioPath));
+        qDebug() << "Audio file does not exist or is not readable:" << audioPath;
         return;
     }
 
@@ -197,28 +200,28 @@ void SeparationWorker::processSingleFile(const QString& audioPath, const QString
     QString featurePath = QString("%1/%2.txt").arg(Constants::OUTPUT_FEATURES_DIR).arg(featureName);
     torch::Tensor condition = loadFeature(featurePath);
     if (!condition.defined() || condition.numel() == 0) {
-        emit error(QString("Failed to load feature tensor: %1").arg(featurePath));
+        qDebug() << "Failed to load feature tensor:" << featurePath;
         return;
     }
 
     // Load audio waveform tensor from file (assumed to be WAV)
     torch::Tensor waveform = AudioPreprocessUtils::loadAudio(audioPath);
     if (waveform.numel() == 0) {
-        emit error(QString("Failed to load audio waveform from: %1").arg(audioPath));
+        qDebug() << "Failed to load audio waveform from:" << audioPath;
         return;
     }
 
     AudioPreprocessUtils::saveToWav(waveform, Constants::TEMP_SEGMENTS_DIR + "/mono.wav");
 
     if (waveform.dim() != 1) {
-        emit error("Loaded waveform tensor must be 1D");
+        qDebug() << "Loaded waveform tensor must be 1D";
         return;
     }
 
     int64_t totalSamples = waveform.size(0);
     int64_t step = static_cast<int64_t>(clipSamples * (1.0f - overlapRate));
     if (step <= 0) {
-        emit error("Invalid step size calculated from clipSamples and overlapRate");
+        qDebug() << "Invalid step size calculated from clipSamples and overlapRate";
         return;
     }
 
@@ -244,19 +247,19 @@ void SeparationWorker::processSingleFile(const QString& audioPath, const QString
 
         torch::Tensor processedChunk = processChunk(chunk, condition, &extractor);
         if (!processedChunk.defined() || processedChunk.numel() == 0) {
-            emit error("Processing chunk failed");
+            qDebug() << "Processing chunk failed";
             return;
         }
 
         // Save chunk to file immediately, do not store in RAM vector
         QString chunkFilePath = QString("%1/%2_chunk_%3.wav").arg(Constants::TEMP_SEGMENTS_DIR).arg(featureName).arg(chunkIndex);
-        emit chunkReady(chunkFilePath, featureName, processedChunk);
+        qDebug() << "Chunk ready:" << chunkFilePath;
         chunkFilePaths.append(chunkFilePath);
 
         // Update progress
         int progress = static_cast<int>(100.0 * (pos + clipSamples) / totalSamples);
         if (progress > 100) progress = 100;
-        emit progressUpdated(progress);
+        qDebug() << "Progress updated:" << progress << "%";
 
         pos += step;
         chunkIndex++;
@@ -269,13 +272,13 @@ void SeparationWorker::processSingleFile(const QString& audioPath, const QString
     try {
         torch::Tensor finalTensor = doOverlapAdd(chunkFilePaths);
         if (!finalTensor.defined() || finalTensor.numel() == 0) {
-            emit error("Overlap-add failed");
+            qDebug() << "Overlap-add failed";
             return;
         }
 
-        emit separationFinished(audioPath, featureName, finalTensor);
+        qDebug() << "Separation finished for:" << audioPath;
     } catch (const c10::Error& e) {
-        emit error(QString("Final overlap-add error: %1").arg(e.what()));
+        qDebug() << "Final overlap-add error:" << e.what();
         return;
     }
 }

@@ -6,21 +6,19 @@
 #include "constants.h"
 #include <sndfile.h>
 
-HTSATWorker::HTSATWorker(QObject *parent)
-    : QObject(parent)
+HTSATWorker::HTSATWorker()
 {
 }
 
-void HTSATWorker::generateFeatures(const QStringList& filePaths, const QString& outputFileName) {
-    std::vector<float> avg_emb = doGenerateAudioFeatures(filePaths, outputFileName);
-    if (!avg_emb.empty()) {
-        emit finished(avg_emb, outputFileName);
-    } else {
-        emit error("Failed to generate features");
-    }
+HTSATWorker::~HTSATWorker()
+{
 }
 
-std::vector<float> HTSATWorker::doGenerateAudioFeatures(const QStringList& filePaths, const QString& outputFileName)
+std::vector<float> HTSATWorker::generateFeatures(const QStringList& filePaths) {
+    return doGenerateAudioFeatures(filePaths);
+}
+
+std::vector<float> HTSATWorker::doGenerateAudioFeatures(const QStringList& filePaths)
 {
     HTSATProcessor processor;
     if (!processor.loadModelFromResource(Constants::HTSAT_MODEL_RESOURCE)) {
@@ -31,12 +29,12 @@ std::vector<float> HTSATWorker::doGenerateAudioFeatures(const QStringList& fileP
         }
     }
 
-    QVector<std::vector<float>> embeddings = processFilesAndCollectEmbeddings(filePaths, &processor);
+    QVector<std::vector<float>> embeddings = this->processFilesAndCollectEmbeddings(filePaths, &processor);
     if (embeddings.isEmpty()) {
         return std::vector<float>();
     }
 
-    std::vector<float> avg_emb = computeAverageEmbedding(embeddings);
+    std::vector<float> avg_emb = this->computeAverageEmbedding(embeddings);
     return avg_emb;
 }
 
@@ -106,7 +104,6 @@ QVector<std::vector<float>> HTSATWorker::processFilesAndCollectEmbeddings(const 
         embeddings.append(embedding);
         int progress = (i + 1) * 100 / totalFiles;
         printf("end\n");
-        emit progressUpdated(progress);
     }
     return embeddings;
 }

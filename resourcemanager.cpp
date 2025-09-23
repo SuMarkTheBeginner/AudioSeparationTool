@@ -11,15 +11,8 @@
 #include <vector>
 #include <QDateTime>
 #include <QCoreApplication>
-#include <QThread>
 #include "htsatworker.h"
 #include "separationworker.h"
-#include <QMetaObject>
-
-static QThread* htsatThread = nullptr;
-static HTSATWorker* htsatWorker = nullptr;
-static QThread* separationThread = nullptr;
-static SeparationWorker* separationWorker = nullptr;
 
 ResourceManager* ResourceManager::m_instance = nullptr;
 
@@ -44,54 +37,6 @@ ResourceManager::ResourceManager(QObject* parent)
     m_fileTypeData[FileType::WavForSeparation] = FileTypeData();
 
     m_isProcessing = false;
-
-
-    htsatThread = new QThread(this);
-    htsatWorker = new HTSATWorker();
-    htsatWorker->moveToThread(htsatThread);
-
-    connect(htsatThread, &QThread::finished, htsatWorker, &QObject::deleteLater);
-    connect(this, &ResourceManager::startHTSATProcessing, htsatWorker, &HTSATWorker::generateFeatures);
-    connect(htsatWorker, &HTSATWorker::progressUpdated, this, &ResourceManager::processingProgress);
-    connect(htsatWorker, &HTSATWorker::finished, this, [this](const std::vector<float>& avgEmb, const QString& outputFileName){
-        QString filePath = saveEmbedding(avgEmb, outputFileName);
-        m_isProcessing = false;
-        emit processingFinished(QStringList() << filePath);
-        emit featuresUpdated();
-    });
-    connect(htsatWorker, &HTSATWorker::error, this, [this](const QString& error){
-        m_isProcessing = false;
-        emit processingError(error);
-    });
-
-    htsatThread->start();
-
-    separationThread = new QThread(this);
-    separationWorker = new SeparationWorker();
-    separationWorker->moveToThread(separationThread);
-
-    connect(separationThread, &QThread::finished, separationWorker, &QObject::deleteLater);
-    connect(this, &ResourceManager::startSeparationProcessing, separationWorker, &SeparationWorker::processFile);
-    connect(separationWorker, &SeparationWorker::progressUpdated, this, &ResourceManager::processingProgress);
-    connect(separationWorker, &SeparationWorker::chunkReady, this, &ResourceManager::handleChunk);
-connect(separationWorker, &SeparationWorker::separationFinished, this, &ResourceManager::handleFinalResult);
-
-connect(separationWorker, &SeparationWorker::separationFinished, this, [this](const QString& audioPath){
-    m_isProcessing = false;
-    QStringList results;
-    QString outputName = QFileInfo(audioPath).baseName() + "_separated.wav";
-    QString outputPath = Constants::SEPARATED_RESULT_DIR + "/" + outputName;
-    results << outputPath;
-    emit separationProcessingFinished(results);
-});
-
-connect(separationWorker, &SeparationWorker::error, this, [this](const QString& error){
-    m_isProcessing = false;
-    emit processingError(error);
-});
-
-    separationThread->start();
-    
 }
 
 /**
@@ -137,20 +82,6 @@ ResourceManager::~ResourceManager()
         data.files.clear();
     }
     m_fileTypeData.clear();
-
-    if (htsatThread) {
-        htsatThread->quit();
-        htsatThread->wait();
-        htsatThread = nullptr;
-        htsatWorker = nullptr;
-    }
-
-    if (separationThread) {
-        separationThread->quit();
-        separationThread->wait();
-        separationThread = nullptr;
-        separationWorker = nullptr;
-    }
 }
 
 /**
@@ -416,15 +347,36 @@ void ResourceManager::startGenerateAudioFeatures(const QStringList& filePaths, c
     if (m_isProcessing) return;
     m_isProcessing = true;
     emit processingStarted();
-    emit startHTSATProcessing(filePaths, outputFileName);
+
+    // Create worker instance and process directly
+    HTSATWorker worker;
+    std::vector<float> avgEmb = worker.generateFeatures(filePaths);
+
+    // Save the embedding
+    QString filePath = saveEmbedding(avgEmb, outputFileName);
+    m_isProcessing = false;
+    emit processingFinished(QStringList() << filePath);
+    emit featuresUpdated();
 }
 
-void ResourceManager::startSeparateAudio(const QStringList& filePaths, const QString& outputFileName)
+void ResourceManager::startSeparateAudio(const QStringList& filePaths, const QString& featureName)
 {
     if (m_isProcessing) return;
     m_isProcessing = true;
     emit processingStarted();
-    emit startSeparationProcessing(filePaths, outputFileName);
+
+    // Create worker instance and process directly
+    SeparationWorker worker;
+    worker.processFile(filePaths, featureName);
+
+    m_isProcessing = false;
+    QStringList results;
+    for (const QString& filePath : filePaths) {
+        QString outputName = QFileInfo(filePath).baseName() + "_separated.wav";
+        QString outputPath = Constants::SEPARATED_RESULT_DIR + "/" + outputName;
+        results << outputPath;
+    }
+    emit separationProcessingFinished(results);
 }
 
 void ResourceManager::autoLoadSoundFeatures()
@@ -644,14 +596,4 @@ bool ResourceManager::isDeletable(FileType type)
     }
 }
 
-void ResourceManager::handleChunk(const QString& chunkFilePath, const QString& featureName, const torch::Tensor& chunkData)
-{
-    saveWav(chunkData, chunkFilePath);
-}
 
-void ResourceManager::handleFinalResult(const QString& audioPath, const QString& featureName, const torch::Tensor& finalTensor)
-{
-    QString outputName = QFileInfo(audioPath).baseName() + "_separated.wav";
-    QString outputPath = Constants::SEPARATED_RESULT_DIR + "/" + outputName;
-    saveWav(finalTensor, outputPath);
-}
