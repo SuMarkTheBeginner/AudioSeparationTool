@@ -28,31 +28,35 @@ HTSATProcessor::HTSATProcessor(QObject *parent)
  */
 bool HTSATProcessor::loadModel(const QString& modelPath)
 {
-    // 轉成 native Windows 路徑（反斜線）
-    QString nativePath = QDir::toNativeSeparators(modelPath);
+    try {
+        // 1️⃣ 先載入 TorchScript 模型
+        model = torch::jit::load(modelPath.toStdString());
+        model.eval();
 
-    // 用 UTF-8 輸出路徑字串，避免編碼錯誤
-    std::string utf8Path = nativePath.toUtf8().constData();
+        // 2️⃣ 判斷 GPU 是否可用
+        if (torch::cuda::is_available()) {
+            model.to(torch::kCUDA);
+            qDebug() << "[HTSAT] Model loaded on GPU";
+        } else {
+            model.to(torch::kCPU);
+            qDebug() << "[HTSAT] Model loaded on CPU";
+        }
 
-    // Debug 確認
-    qDebug() << "Trying to load model from:" << nativePath;
-
-    // 用 ifstream 開啟檔案 (binary mode)
-    std::ifstream f(utf8Path, std::ios::binary);
-    if (!f.is_open()) {
-        qDebug() << "Model file not found or cannot open:" << nativePath;
+        modelLoaded = true;
+        return true;
+    }
+    catch (const c10::Error& e) {
+        emit errorOccurred(QString("Error loading model: %1").arg(e.what()));
+        modelLoaded = false;
         return false;
     }
-
-    try {
-        model = torch::jit::load(f);
-        model.eval();
-        modelLoaded = true;
-        qDebug() << "Model loaded successfully!";
-        return true;
-    } catch (const c10::Error& e) {
-        emit errorOccurred(QString("Error loading model: %1").arg(e.what()));
-        qDebug() << "Error loading model:" << e.what();
+    catch (const std::exception& e) {
+        emit errorOccurred(QString("Standard exception: %1").arg(e.what()));
+        modelLoaded = false;
+        return false;
+    }
+    catch (...) {
+        emit errorOccurred("Unknown error loading model");
         modelLoaded = false;
         return false;
     }
@@ -66,103 +70,49 @@ bool HTSATProcessor::loadModel(const QString& modelPath)
 std::vector<float> HTSATProcessor::processTensor(const torch::Tensor& audioTensor)
 {
     if (!modelLoaded) {
-        qDebug() << "HTSATProcessor::processTensor - Model not loaded";
+        qDebug() <<"?";
+        
         emit errorOccurred("Model not loaded.");
         return {};
     }
 
-    // Enhanced logging for debugging
-    qDebug() << "HTSATProcessor::processTensor - Input tensor info:";
-    qDebug() << "  - Shape: [" << audioTensor.size(0) << "," << audioTensor.size(1) << "]";
-    auto dtype = audioTensor.dtype();
-    QString dtypeName;
-
-    if (dtype == torch::kFloat32) dtypeName = "float32";
-    else if (dtype == torch::kFloat64) dtypeName = "float64";
-    else if (dtype == torch::kInt32) dtypeName = "int32";
-    else if (dtype == torch::kInt64) dtypeName = "int64";
-    else dtypeName = "unknown";
-
-    qDebug() << "  - Dtype:" << dtypeName;
-    c10::DeviceType dev_type = audioTensor.device().type();
-    QString dev_name = QString::fromStdString(c10::DeviceTypeName(dev_type));
-    qDebug() << "  - Device:" << dev_name;
-    qDebug() << "  - Numel:" << audioTensor.numel();
-
     // Check for empty tensor
     if (audioTensor.numel() == 0) {
-        qDebug() << "HTSATProcessor::processTensor - Empty input tensor";
+        qDebug() <<"?";
         emit errorOccurred("Input tensor is empty");
         return {};
     }
 
-    // Check for invalid values
-    auto minVal = audioTensor.min().item<float>();
-    auto maxVal = audioTensor.max().item<float>();
-    auto meanVal = audioTensor.mean().item<float>();
-
-    qDebug() << "HTSATProcessor::processTensor - Value range:";
-    qDebug() << "  - Min:" << minVal;
-    qDebug() << "  - Max:" << maxVal;
-    qDebug() << "  - Mean:" << meanVal;
-
     // Check for NaN or infinite values
     if (!torch::isfinite(audioTensor).all().item<bool>()) {
-        qDebug() << "HTSATProcessor::processTensor - Tensor contains NaN or infinite values";
+        qDebug() <<"?";
         emit errorOccurred("Input tensor contains invalid values (NaN or infinite)");
         return {};
     }
 
-    // The model expects input shape (B, T) with T = AUDIO_CLIP_SAMPLES (10 seconds at 32kHz)
-    const int64_t expectedLength = Constants::AUDIO_CLIP_SAMPLES;
-
-    // Assume audioTensor is (frames, channels), convert to (1, frames) assuming mono
-    torch::Tensor reshaped = audioTensor.squeeze(1).unsqueeze(0); // (1, frames)
-
-    qDebug() << "HTSATProcessor::processTensor - After reshaping:";
-    qDebug() << "  - Shape: [" << reshaped.size(0) << "," << reshaped.size(1) << "]";
-
-    torch::Tensor tensor;
-
-    if (reshaped.size(1) == expectedLength) {
-        tensor = reshaped;
-        qDebug() << "HTSATProcessor::processTensor - Using tensor as-is (correct length)";
-    } else if (reshaped.size(1) < expectedLength) {
-        // Pad with zeros
-        int64_t paddingSize = expectedLength - reshaped.size(1);
-        tensor = torch::constant_pad_nd(reshaped, {0, paddingSize}, 0);
-        qDebug() << "HTSATProcessor::processTensor - Padded tensor with" << paddingSize << "zeros";
-    } else {
-        // Truncate
-        tensor = reshaped.narrow(1, 0, expectedLength);
-        qDebug() << "HTSATProcessor::processTensor - Truncated tensor to" << expectedLength << "samples";
-    }
-
-    qDebug() << "HTSATProcessor::processTensor - Final tensor shape: [" << tensor.size(0) << "," << tensor.size(1) << "]";
-
-    std::vector<torch::jit::IValue> inputs;
-    inputs.push_back(tensor);
-
+    torch::Tensor tensor = audioTensor.squeeze(1).unsqueeze(0); // (1, frames)
+    qDebug() <<"reshape " << tensor.size(0) << "x" << tensor.size(1);
+    std::vector<torch::jit::IValue> inputs = {tensor};
     try {
-        qDebug() << "HTSATProcessor::processTensor - Starting model inference...";
+        
         auto output_dict = model.forward(inputs).toGenericDict();
+        printf("forward pass\n");
         torch::Tensor output = output_dict.at("latent_output").toTensor();
-
-        qDebug() << "HTSATProcessor::processTensor - Model inference successful";
-        qDebug() << "HTSATProcessor::processTensor - Output shape: [" << output.size(0) << "," << output.size(1) << "]";
 
         // Output shape: (1, 2048)
         std::vector<float> embedding(output.data_ptr<float>(), output.data_ptr<float>() + output.numel());
-        qDebug() << "HTSATProcessor::processTensor - Embedding size:" << embedding.size();
-
+        
+        printf("output_dict pass\n");
         emit processingFinished(embedding);
+        printf("output_dict emit pass\n");
         return embedding;
     } catch (const c10::Error& e) {
-        qDebug() << "HTSATProcessor::processTensor - Model inference error:" << e.what();
+        printf("output_dict dead\n");
+        
         emit errorOccurred(QString("Model inference error: %1").arg(e.what()));
         return {};
     } catch (const std::exception& e) {
-        qDebug() << "HTSATProcessor::processTensor - Standard exception:" << e.what();
+        qDebug()<<"?"<<e.what();
         emit errorOccurred(QString("Processing error: %1").arg(e.what()));
         return {};
     }
@@ -228,7 +178,7 @@ bool HTSATProcessor::loadModelFromResource(const QString& resourcePath)
         
         QFile::remove(tempFile.fileName());
         
-        qDebug() << "Successfully loaded model from resource:" << resourcePath;
+        
         return true;
     } catch (const c10::Error& e) {
         emit errorOccurred(QString("Error loading model from resource: %1").arg(e.what()));

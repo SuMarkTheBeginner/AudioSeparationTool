@@ -76,13 +76,15 @@ QVector<std::vector<float>> HTSATWorker::processFilesAndCollectEmbeddings(const 
         qDebug() << "HTSATWorker::processFilesAndCollectEmbeddings - Processing tensor for file:" << filePath;
 // 確保 processor 接收 shape=(frames, 1)
         torch::Tensor inputTensor = audioTensor.unsqueeze(1);
+        qDebug() << "unsqueese";
         std::vector<float> embedding = processor->processTensor(inputTensor);
         if (embedding.empty()) {
+            printf("?\n");
             qDebug() << "HTSATWorker::processFilesAndCollectEmbeddings - Failed to process tensor for file:" << filePath;
-        qDebug() << "Audio tensor length:" << audioTensor.size(0);
-        qDebug() << "HTSATWorker::processFilesAndCollectEmbeddings - Audio tensor dtype:"
-                     << QString::fromStdString(std::string(audioTensor.dtype().name()));
-        qDebug() << "HTSATWorker::processFilesAndCollectEmbeddings - Audio tensor numel:" << audioTensor.numel();
+            qDebug() << "Audio tensor length:" << audioTensor.size(0);
+            qDebug() << "HTSATWorker::processFilesAndCollectEmbeddings - Audio tensor dtype:"
+                         << QString::fromStdString(std::string(audioTensor.dtype().name()));
+            qDebug() << "HTSATWorker::processFilesAndCollectEmbeddings - Audio tensor numel:" << audioTensor.numel();
 
             // Try to provide more specific error information
             if (audioTensor.numel() == 0) {
@@ -103,6 +105,7 @@ QVector<std::vector<float>> HTSATWorker::processFilesAndCollectEmbeddings(const 
         }
         embeddings.append(embedding);
         int progress = (i + 1) * 100 / totalFiles;
+        printf("end\n");
         emit progressUpdated(progress);
     }
     return embeddings;

@@ -32,6 +32,8 @@ add_definitions(-DHAS_MULTIMEDIA)
 # ---- LibTorch ----
 set(Torch_DIR "C:/libtorch/share/cmake/Torch")
 set(CMAKE_PREFIX_PATH "D:/Qt/6.9.2/msvc2022_64;C:/libtorch;C:/vcpkg/installed/x64-windows")
+set(CAFFE2_USE_CUDA OFF)
+set(TORCH_CUDA_FOUND OFF)
 find_package(Torch REQUIRED PATHS "C:/libtorch" NO_DEFAULT_PATH)
 include_directories(${TORCH_INCLUDE_DIRS})
 
@@ -128,5 +130,14 @@ target_link_libraries(AudioSeparationTool
     SampleRate::samplerate
     SndFile::sndfile
 )
+
+# ---- test executables ----
+add_executable(zero_shot_test zero_shot_test.cpp)
+target_link_libraries(zero_shot_test PRIVATE torch SndFile::sndfile SampleRate::samplerate Qt6::Widgets)
+
+add_executable(htsat_model_test htsat_model_test.cpp)
+target_link_libraries(htsat_model_test PRIVATE torch SndFile::sndfile SampleRate::samplerate Qt6::Widgets)
+
+
 
 qt_finalize_executable(AudioSeparationTool)
