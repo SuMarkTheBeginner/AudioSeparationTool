@@ -28,19 +28,15 @@ HTSATProcessor::HTSATProcessor(QObject *parent)
  */
 bool HTSATProcessor::loadModel(const QString& modelPath)
 {
+    torch::NoGradGuard no_grad;
     try {
         // 1️⃣ 先載入 TorchScript 模型
         model = torch::jit::load(modelPath.toStdString());
         model.eval();
 
-        // 2️⃣ 判斷 GPU 是否可用
-        if (torch::cuda::is_available()) {
-            model.to(torch::kCUDA);
-            qDebug() << "[HTSAT] Model loaded on GPU";
-        } else {
-            model.to(torch::kCPU);
-            qDebug() << "[HTSAT] Model loaded on CPU";
-        }
+        // 🚫 不使用 CUDA，強制 CPU
+        model.to(torch::kCPU);
+        qDebug() << "[HTSAT] Model loaded on CPU (forced)";
 
         modelLoaded = true;
         return true;
@@ -90,9 +86,13 @@ std::vector<float> HTSATProcessor::processTensor(const torch::Tensor& audioTenso
         return {};
     }
 
-    torch::Tensor tensor = audioTensor.squeeze(1).unsqueeze(0); // (1, frames)
+    // 🚫 強制 CPU
+    torch::Tensor tensor = audioTensor.squeeze(1).unsqueeze(0).to(torch::kCPU);
+
     qDebug() <<"reshape " << tensor.size(0) << "x" << tensor.size(1);
     std::vector<torch::jit::IValue> inputs = {tensor};
+
+    torch::NoGradGuard no_grad;
     try {
         
         auto output_dict = model.forward(inputs).toGenericDict();
@@ -117,28 +117,6 @@ std::vector<float> HTSATProcessor::processTensor(const torch::Tensor& audioTenso
         return {};
     }
 }
-
-/**
- * @brief Processes an audio file to generate an embedding.
- * @param audioPath Path to the audio file (WAV format).
- * @return The generated embedding as a vector of floats, or empty vector on failure.
- */
-std::vector<float> HTSATProcessor::processAudio(const QString& audioPath)
-{
-    // Deprecated: Use processTensor instead
-    emit errorOccurred("processAudio is deprecated. Use processTensor instead.");
-    return {};
-}
-
-/**
- * @brief Checks if the model is loaded and ready for inference.
- * @return True if model is loaded, false otherwise.
- */
-bool HTSATProcessor::isModelLoaded() const
-{
-    return modelLoaded;
-}
-
 
 bool HTSATProcessor::loadModelFromResource(const QString& resourcePath)
 {
@@ -171,9 +149,15 @@ bool HTSATProcessor::loadModelFromResource(const QString& resourcePath)
 
     tempFile.close();
 
+    torch::NoGradGuard no_grad;
     try {
         model = torch::jit::load(tempFile.fileName().toStdString());
         model.eval();
+
+        // 🚫 強制 CPU
+        model.to(torch::kCPU);
+        qDebug() << "[HTSAT] Model loaded on CPU (forced, from resource)";
+        
         modelLoaded = true;
         
         QFile::remove(tempFile.fileName());
@@ -188,4 +172,9 @@ bool HTSATProcessor::loadModelFromResource(const QString& resourcePath)
         
         return false;
     }
+}
+
+bool HTSATProcessor::isModelLoaded() const
+{
+    return modelLoaded;
 }

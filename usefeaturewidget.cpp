@@ -21,6 +21,12 @@ UseFeatureWidget::UseFeatureWidget(QWidget *parent)
     connect(rm, &ResourceManager::processingProgress, this, &UseFeatureWidget::onProcessingProgress);
     connect(rm, &ResourceManager::processingFinished, this, &UseFeatureWidget::onProcessingFinished);
     connect(rm, &ResourceManager::separationProcessingFinished, this, &UseFeatureWidget::onSeparationProcessingFinished);
+    connect(rm, &ResourceManager::processingError, this, &UseFeatureWidget::onProcessingError);
+
+    // Connect to processingStarted to disable button when any worker starts
+    connect(rm, &ResourceManager::processingStarted, this, [this]() {
+        processButton->setEnabled(false);
+    });
 }
 
 void UseFeatureWidget::setupUI()
@@ -79,6 +85,7 @@ void UseFeatureWidget::setupProcessingUI()
     mainLayout->addWidget(processButton);
 
     resultLabel = new QLabel(Constants::PROCESSED_FILES_LABEL, this);
+    resultLabel->setVisible(false); // Hide initially - only show when there are results
     mainLayout->addWidget(resultLabel);
 
     resultList = new QListWidget(this);
@@ -274,8 +281,8 @@ void UseFeatureWidget::onProcessClicked()
 
 void UseFeatureWidget::onProcessingProgress(int value)
 {
-    // Update UI with progress value, e.g., update a progress bar or label
-    resultLabel->setText(QString("Processing: %1%").arg(value));
+    // Don't show progress percentage text - user doesn't want it
+    // Progress is shown in the main window progress bar instead
 }
 
 void UseFeatureWidget::onProcessingFinished(const QStringList& results)
@@ -289,7 +296,7 @@ void UseFeatureWidget::onProcessingFinished(const QStringList& results)
     // Refresh feature list or results
     loadFeatures();
 
-    resultLabel->setText("Processing finished.");
+    resultLabel->setVisible(false);
 }
 
 void UseFeatureWidget::onSeparationProcessingFinished(const QStringList& results)
@@ -304,7 +311,21 @@ void UseFeatureWidget::onSeparationProcessingFinished(const QStringList& results
     // Re-enable process button
     processButton->setEnabled(true);
 
-    resultLabel->setText("Separation processing finished.");
+    // Make the process indicator disappear
+    resultLabel->setVisible(false);
+
+    // Ensure progress bar is hidden when separation is complete
+    // The main window will handle hiding the global progress bar via processingFinished signal
+}
+
+void UseFeatureWidget::onProcessingError(const QString& error)
+{
+    // Re-enable process button on error
+    processButton->setEnabled(true);
+
+    // Keep the error visible temporarily
+    resultLabel->setText("Processing error: " + error);
+    resultLabel->setVisible(true);
 }
 
 void UseFeatureWidget::onDeleteClicked()

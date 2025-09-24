@@ -18,6 +18,7 @@ bool ZeroShotASPFeatureExtractor::loadModel(const QString& modelPath)
         return false;
     }
 
+    torch::NoGradGuard no_grad;
     try {
         model = torch::jit::load(modelPath.toStdString());
         modelLoaded = true;
@@ -48,6 +49,7 @@ torch::Tensor ZeroShotASPFeatureExtractor::forward(const torch::Tensor& waveform
         return torch::Tensor();
     }
 
+    torch::NoGradGuard no_grad;
     try {
         std::vector<torch::jit::IValue> inputs = {waveform, condition};
         torch::Tensor output = model.forward(inputs).toTensor();
@@ -96,6 +98,7 @@ bool ZeroShotASPFeatureExtractor::loadModelFromResource(const QString& resourceP
 
     tempFile.close();
 
+    torch::NoGradGuard no_grad;
     try {
         model = torch::jit::load(tempFile.fileName().toStdString());
         modelLoaded = true;

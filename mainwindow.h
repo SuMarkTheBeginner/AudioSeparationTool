@@ -35,15 +35,15 @@ public:
 
 private:
     // UI Layout Components
-    QWidget* centralWidgetContainer;  ///< Main container for the central widget
-    QWidget* sidebar;                 ///< Sidebar widget for navigation buttons
-    QVBoxLayout* sidebarLayout;       ///< Layout for sidebar elements
-    QHBoxLayout* mainLayout;          ///< Main horizontal layout (sidebar + content)
-    QStackedWidget* stackedContent;   ///< Stacked widget for different content pages
-    QProgressBar* globalProgressBar;  ///< Global progress bar at the bottom
-    AddSoundFeatureWidget* addSoundFeatureWidget;
-    UseFeatureWidget* useFeatureWidget;
-    AudioPlayer* audioPlayer;         ///< Audio player widget for playback control
+    QWidget* m_centralWidgetContainer;  ///< Main container for the central widget
+    QWidget* m_sidebar;                 ///< Sidebar widget for navigation buttons
+    QVBoxLayout* m_sidebarLayout;       ///< Layout for sidebar elements
+    QHBoxLayout* m_mainLayout;          ///< Main horizontal layout (sidebar + content)
+    QStackedWidget* m_stackedContent;   ///< Stacked widget for different content pages
+    QProgressBar* m_globalProgressBar;  ///< Global progress bar at the bottom
+    AddSoundFeatureWidget* m_addSoundFeatureWidget;
+    UseFeatureWidget* m_useFeatureWidget;
+    AudioPlayer* m_audioPlayer;         ///< Audio player widget for playback control
 
     // Setup Methods
     void setupUI();       ///< Initializes the main UI components and layout

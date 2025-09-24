@@ -88,6 +88,8 @@ const QString DEBUG_FEATURE_CREATED = "Debug: Feature creation started for %1 fi
 const QString DEBUG_FOLDER_ADDED = "Debug: Folder added - %1";
 const QString DEBUG_FILE_ADDED = "Debug: File added - %1";
 
+
+
 }
 
 #endif // CONSTANTS_H

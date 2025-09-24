@@ -74,15 +74,18 @@ ResourceManager::ResourceManager(QObject* parent)
     connect(this, &ResourceManager::startSeparationProcessing, separationWorker, &SeparationWorker::processFile);
     connect(separationWorker, &SeparationWorker::progressUpdated, this, &ResourceManager::processingProgress);
     connect(separationWorker, &SeparationWorker::chunkReady, this, &ResourceManager::handleChunk);
-connect(separationWorker, &SeparationWorker::separationFinished, this, &ResourceManager::handleFinalResult);
+    connect(separationWorker, &SeparationWorker::separationFinished, this, &ResourceManager::handleFinalResult);
+    connect(separationWorker, &SeparationWorker::deleteChunkFile, this, [this](const QString& path) {
+        removeFile(path, FileType::TempSegment);
+    });
 
-connect(separationWorker, &SeparationWorker::separationFinished, this, [this](const QString& audioPath){
-    m_isProcessing = false;
-    QStringList results;
-    QString outputName = QFileInfo(audioPath).baseName() + "_separated.wav";
-    QString outputPath = Constants::SEPARATED_RESULT_DIR + "/" + outputName;
-    results << outputPath;
-    emit separationProcessingFinished(results);
+    connect(separationWorker, &SeparationWorker::separationFinished, this, [this](const QString& audioPath, const QString& featureName, const torch::Tensor&) {
+        m_isProcessing = false;
+        QStringList results;
+        QString outputName = QFileInfo(audioPath).baseName() + "_" + featureName + ".wav";
+        QString outputPath = Constants::SEPARATED_RESULT_DIR + "/" + outputName;
+        results << outputPath;
+        emit separationProcessingFinished(results);
 });
 
 connect(separationWorker, &SeparationWorker::error, this, [this](const QString& error){
@@ -477,18 +480,45 @@ void ResourceManager::removeFeature(const QString& featureName)
  */
 bool ResourceManager::saveWav(const torch::Tensor& waveform, const QString& filePath, int sampleRate)
 {
+    qDebug() << "Debug: saveWav called for" << filePath;
+    qDebug() << "Debug: Input tensor shape:" << waveform.size(0) << "x" << (waveform.dim() > 1 ? waveform.size(1) : 1) << "x" << (waveform.dim() > 2 ? waveform.size(2) : 1);
+    qDebug() << "Debug: Input tensor dimensions:" << waveform.dim();
+    qDebug() << "Debug: Input tensor numel:" << waveform.numel();
+
     QFile file(filePath);
     if (!file.open(QIODevice::WriteOnly)) {
+        qDebug() << "Debug: Failed to open file for writing:" << filePath;
         return false;
     }
 
-    torch::Tensor flatWaveform = waveform.flatten();
-    auto sizes = flatWaveform.sizes();
-    if (sizes.size() != 1) {
+    torch::Tensor audio2d;
+    if (waveform.dim() == 1) {
+        qDebug() << "Debug: Converting 1D tensor to 2D";
+        audio2d = waveform.unsqueeze(1);
+    } else if (waveform.dim() == 2) {
+        qDebug() << "Debug: Using 2D tensor as is";
+        audio2d = waveform;
+    } else if (waveform.dim() == 3 && waveform.size(0) == 1 && waveform.size(2) == 1) {
+        qDebug() << "Debug: Converting 3D tensor (1, frames, 1) to 2D";
+        qDebug() << "Debug: Before squeeze - shape:" << waveform.size(0) << "x" << waveform.size(1) << "x" << waveform.size(2);
+        torch::Tensor afterFirstSqueeze = waveform.squeeze(0);
+        qDebug() << "Debug: After squeeze(0) - shape:" << afterFirstSqueeze.size(0) << "x" << afterFirstSqueeze.size(1);
+        // For (frames, 1) tensor, we don't need squeeze(2), just unsqueeze to make it (frames, 1)
+        audio2d = afterFirstSqueeze;
+        qDebug() << "Debug: Using (frames, 1) tensor as 2D - shape:" << audio2d.size(0) << "x" << audio2d.size(1);
+    } else {
+        qDebug() << "Debug: Unsupported tensor shape for saveWav - dim:" << waveform.dim() << "shape:" << waveform.size(0) << "x" << (waveform.dim() > 1 ? waveform.size(1) : 1) << "x" << (waveform.dim() > 2 ? waveform.size(2) : 1);
         return false;
     }
-    int numSamples = sizes[0];
-    float* data = flatWaveform.data_ptr<float>();
+
+    qDebug() << "Debug: Final audio2d shape:" << audio2d.size(0) << "x" << audio2d.size(1);
+    qDebug() << "Debug: Final audio2d numel:" << audio2d.numel();
+
+    short channels = static_cast<short>(audio2d.size(1));
+    int64_t numSamples = audio2d.numel();
+    float* data = audio2d.data_ptr<float>();
+
+    qDebug() << "Debug: Writing WAV with channels:" << channels << "numSamples:" << numSamples;
 
     file.write("RIFF", 4);
     int fileSizePos = file.pos();
@@ -500,18 +530,17 @@ bool ResourceManager::saveWav(const torch::Tensor& waveform, const QString& file
     file.write((char*)&fmtSize, 4);
     short format = 3;
     file.write((char*)&format, 2);
-    short channels = 1;
     file.write((char*)&channels, 2);
     file.write((char*)&sampleRate, 4);
-    int byteRate = sampleRate * 4;
+    int byteRate = sampleRate * channels * 4;
     file.write((char*)&byteRate, 4);
-    short blockAlign = 4;
+    short blockAlign = channels * 4;
     file.write((char*)&blockAlign, 2);
     short bitsPerSample = 32;
     file.write((char*)&bitsPerSample, 2);
 
     file.write("data", 4);
-    int dataSize = numSamples * 4;
+    int dataSize = static_cast<int>(numSamples * 4);
     file.write((char*)&dataSize, 4);
     file.write((char*)data, dataSize);
 
@@ -651,7 +680,17 @@ void ResourceManager::handleChunk(const QString& chunkFilePath, const QString& f
 
 void ResourceManager::handleFinalResult(const QString& audioPath, const QString& featureName, const torch::Tensor& finalTensor)
 {
-    QString outputName = QFileInfo(audioPath).baseName() + "_separated.wav";
+    qDebug() << "Debug: handleFinalResult called for" << audioPath << "with feature" << featureName;
+    qDebug() << "Debug: Final tensor shape:" << finalTensor.size(0) << "x" << (finalTensor.dim() > 1 ? finalTensor.size(1) : 1);
+
+    QString outputName = QFileInfo(audioPath).baseName() + "_" + featureName + ".wav";
     QString outputPath = Constants::SEPARATED_RESULT_DIR + "/" + outputName;
-    saveWav(finalTensor, outputPath);
+    qDebug() << "Debug: Saving separation result to:" << outputPath;
+
+    bool saveResult = saveWav(finalTensor, outputPath);
+    if (saveResult) {
+        qDebug() << "Debug: Successfully saved separation result:" << outputPath;
+    } else {
+        qDebug() << "Debug: Failed to save separation result:" << outputPath;
+    }
 }

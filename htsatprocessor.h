@@ -7,6 +7,7 @@
 #ifndef Q_MOC_RUN
 #undef slots
 #include <torch/script.h>
+#include <torch/autograd.h>
 #define slots
 #endif
 #include <vector>
@@ -33,14 +34,13 @@ public:
      * @return True if loading succeeded, false otherwise.
      */
     bool loadModel(const QString& modelPath);
-    bool loadModelFromResource(const QString& resourcePath);
 
     /**
-     * @brief Processes an audio file to generate an embedding.
-     * @param audioPath Path to the audio file (WAV format).
-     * @return The generated embedding as a vector of floats, or empty vector on failure.
+     * @brief Loads the TorchScript model from a resource path.
+     * @param resourcePath Path to the resource containing the model.
+     * @return True if loading succeeded, false otherwise.
      */
-    std::vector<float> processAudio(const QString& audioPath);
+    bool loadModelFromResource(const QString& resourcePath);
 
     /**
      * @brief Processes a preprocessed audio tensor to generate an embedding.
@@ -74,4 +74,3 @@ private:
 };
 
 #endif // HTSATPROCESSOR_H
-    

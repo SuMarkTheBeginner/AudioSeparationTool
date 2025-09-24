@@ -5,41 +5,63 @@
 #undef slots
 #endif
 #include <torch/script.h>
+#include <torch/autograd.h>
 #ifndef Q_MOC_RUN
 #define slots
 #endif
 #include <QString>
 #include <QObject>
 
+/**
+ * @brief Feature extractor for zero-shot audio source separation using TorchScript model.
+ *
+ * Loads and runs a PyTorch model for audio separation based on given conditions.
+ */
 class ZeroShotASPFeatureExtractor : public QObject
 {
     Q_OBJECT
 
 public:
+    /**
+     * @brief Constructs the ZeroShotASPFeatureExtractor.
+     * @param parent The parent QObject (default is nullptr).
+     */
     ZeroShotASPFeatureExtractor(QObject* parent = nullptr);
     ~ZeroShotASPFeatureExtractor() = default;
 
-    // 載入 TorchScript 模型
+    /**
+     * @brief Loads the TorchScript model from the specified path.
+     * @param modelPath Path to the model file.
+     * @return True if loaded successfully, false otherwise.
+     */
     bool loadModel(const QString& modelPath);
 
-    // forward 計算
-    // waveform: (1, clip_samples, 1)
-    // condition: (1, 2048)
-    // return: separated waveform tensor (1, clip_samples, 1)
+    /**
+     * @brief Performs forward pass through the model.
+     * @param waveform Input waveform tensor of shape (1, clip_samples, 1).
+     * @param condition Condition tensor of shape (1, 2048).
+     * @return Separated waveform tensor of shape (1, clip_samples, 1).
+     */
     torch::Tensor forward(const torch::Tensor& waveform,
                           const torch::Tensor& condition);
 
-    // 卸載模型以釋放記憶體
+    /**
+     * @brief Unloads the model to free memory.
+     */
     void unloadModel();
 
-    // 從資源載入模型
+    /**
+     * @brief Loads the model from a resource path.
+     * @param resourcePath Path to the resource containing the model.
+     * @return True if loaded successfully, false otherwise.
+     */
     bool loadModelFromResource(const QString& resourcePath);
 
 signals:
-    void finished(const torch::Tensor& output);
-    void error(const QString& errorMessage);
+    void finished(const torch::Tensor& output); ///< Signal emitted when processing is finished
+    void error(const QString& errorMessage);    ///< Signal emitted when an error occurs
 
 private:
-    torch::jit::script::Module model;
-    bool modelLoaded;
+    torch::jit::script::Module model; ///< The loaded TorchScript model
+    bool modelLoaded;                 ///< Flag indicating if the model is loaded
 };

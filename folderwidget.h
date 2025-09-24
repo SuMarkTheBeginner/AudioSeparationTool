@@ -77,6 +77,11 @@ private:
     QList<WideCheckBox*> filesCheckBoxes; ///< List of file checkboxes
     QSet<QString> addedFiles;       ///< Set of added file paths to prevent duplicates
 
+    /**
+     * @brief Finds the checkbox by its text.
+     * @param text The text of the checkbox.
+     * @return Pointer to the WideCheckBox, or nullptr if not found.
+     */
     WideCheckBox* findCheckBoxByText(const QString& text) const;
 
     /**
@@ -103,9 +108,9 @@ private:
     bool m_updatingCheckStates = false; ///< Flag to prevent recursive updates
 
 signals:
-    void fileRemoved(const QString& filePath);
-    void folderRemoved(const QString& folderPath);
-    void playRequested(const QString& filePath);
+    void fileRemoved(const QString& filePath);   ///< Signal emitted when a file is requested to be removed
+    void folderRemoved(const QString& folderPath); ///< Signal emitted when the folder is requested to be removed
+    void playRequested(const QString& filePath); ///< Signal emitted when play is requested for a file
 
 };
 

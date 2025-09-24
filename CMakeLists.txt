@@ -9,7 +9,7 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
 if(MSVC)
-    add_compile_options(/W3 /WX- /wd4267)
+    add_compile_options(/W1 /wd4267)
     add_definitions(-D_CRT_SECURE_NO_WARNINGS)
 endif()
 
@@ -131,12 +131,7 @@ target_link_libraries(AudioSeparationTool
     SndFile::sndfile
 )
 
-# ---- test executables ----
-add_executable(zero_shot_test zero_shot_test.cpp)
-target_link_libraries(zero_shot_test PRIVATE torch SndFile::sndfile SampleRate::samplerate Qt6::Widgets)
 
-add_executable(htsat_model_test htsat_model_test.cpp)
-target_link_libraries(htsat_model_test PRIVATE torch SndFile::sndfile SampleRate::samplerate Qt6::Widgets)
 
 
 

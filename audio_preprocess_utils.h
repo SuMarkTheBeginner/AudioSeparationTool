@@ -12,9 +12,10 @@ namespace AudioPreprocessUtils {
 /**
  * @brief Loads audio data from a file path.
  * @param filePath The path to the audio file.
+ * @param forceMono Whether to convert stereo to mono (default: true for backward compatibility).
  * @return A tensor representing the audio samples.
  */
-torch::Tensor loadAudio(const QString& filePath);
+torch::Tensor loadAudio(const QString& filePath, bool forceMono = true);
 
 /**
  * @brief Normalizes audio data to a specified range.

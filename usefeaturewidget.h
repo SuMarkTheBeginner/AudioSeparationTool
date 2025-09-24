@@ -60,7 +60,7 @@ private slots:
     void onDeleteClicked();                   ///< Handles delete button click
     void onProcessingProgress(int value);     ///< Handles processing progress updates
     void onProcessingFinished(const QStringList& results); ///< Handles processing completion
-
+    void onProcessingError(const QString& error); ///< Handles processing error
 
 signals:
     void playRequested(const QString& filePath); ///< Signal emitted when play is requested

@@ -28,6 +28,14 @@ AddSoundFeatureWidget::AddSoundFeatureWidget(QWidget *parent)
         createFeatureBtn->setEnabled(false);
     });
     connect(rm, &ResourceManager::processingFinished, this, [this]() {
+        // Release button when any processing (HTSAT or separation) is done
+        createFeatureBtn->setEnabled(true);
+    });
+    connect(rm, &ResourceManager::separationProcessingFinished, this, [this]() {
+        // Also release button when separation processing is done
+        createFeatureBtn->setEnabled(true);
+    });
+    connect(rm, &ResourceManager::processingError, this, [this]() {
         createFeatureBtn->setEnabled(true);
     });
 }

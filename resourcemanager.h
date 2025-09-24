@@ -30,7 +30,10 @@ class ResourceManager : public QObject
     Q_OBJECT
 
 public:
-    // Singleton instance
+    /**
+     * @brief Get the singleton instance of ResourceManager.
+     * @return Pointer to the ResourceManager instance.
+     */
     static ResourceManager* instance();
 
     // File types
@@ -45,49 +48,185 @@ public:
     // =========================
     // Core management (檔案/資料夾管理)
     // =========================
+    /**
+     * @brief Add a folder to the resource manager for the specified file type.
+     * @param folderPath The path of the folder to add.
+     * @param folderParent The parent widget for the folder widget.
+     * @param type The type of files in the folder (default: WavForFeature).
+     * @return Pointer to the created FolderWidget.
+     */
     FolderWidget* addFolder(const QString& folderPath, QWidget* folderParent, FileType type = FileType::WavForFeature);
+
+    /**
+     * @brief Add a single file to the resource manager for the specified file type.
+     * @param filePath The path of the file to add.
+     * @param fileParent The parent widget for the file widget.
+     * @param type The type of the file (default: WavForFeature).
+     * @return Pointer to the created FileWidget.
+     */
     FileWidget* addSingleFile(const QString& filePath, QWidget* fileParent, FileType type = FileType::WavForFeature);
+
+    /**
+     * @brief Remove a file from the resource manager for the specified file type.
+     * @param filePath The path of the file to remove.
+     * @param type The type of the file.
+     */
     void removeFile(const QString& filePath, FileType type);
+
+    /**
+     * @brief Remove a folder from the resource manager for the specified file type.
+     * @param folderPath The path of the folder to remove.
+     * @param type The type of files in the folder.
+     */
     void removeFolder(const QString& folderPath, FileType type);
+
+    /**
+     * @brief Sort all files and folders in ascending or descending order.
+     * @param order The sort order (default: AscendingOrder).
+     */
     void sortAll(Qt::SortOrder order = Qt::AscendingOrder);
+
+    /**
+     * @brief Lock a file to prevent modifications during processing.
+     * @param filePath The path of the file to lock.
+     * @return True if the file was successfully locked, false otherwise.
+     */
     bool lockFile(const QString& filePath);
+
+    /**
+     * @brief Unlock a previously locked file.
+     * @param filePath The path of the file to unlock.
+     * @return True if the file was successfully unlocked, false otherwise.
+     */
     bool unlockFile(const QString& filePath);
+
+    /**
+     * @brief Check if a file is currently locked.
+     * @param filePath The path of the file to check.
+     * @return True if the file is locked, false otherwise.
+     */
     bool isFileLocked(const QString& filePath) const;
+
+    /**
+     * @brief Get all added files for the specified file type.
+     * @param type The type of files to retrieve (default: WavForFeature).
+     * @return A set of file paths.
+     */
     QSet<QString> getAddedFiles(FileType type = FileType::WavForFeature) const;
+
+    /**
+     * @brief Get all added folders for the specified file type.
+     * @param type The type of folders to retrieve (default: WavForFeature).
+     * @return A map of folder paths to FolderWidget pointers.
+     */
     QMap<QString, FolderWidget*> getFolders(FileType type = FileType::WavForFeature) const;
+
+    /**
+     * @brief Get all added single files for the specified file type.
+     * @param type The type of files to retrieve (default: WavForFeature).
+     * @return A map of file paths to FileWidget pointers.
+     */
     QMap<QString, FileWidget*> getSingleFiles(FileType type = FileType::WavForFeature) const;
 
     // =========================
     // Audio / Feature Processing
     // =========================
-    void startGenerateAudioFeatures(const QStringList& filePaths, const QString& outputFileName); // Async HTSAT
-    void startSeparateAudio(const QStringList& filePaths, const QString& featureName);         // Async separation
+    /**
+     * @brief Start asynchronous generation of audio features using HTSAT.
+     * @param filePaths List of audio file paths to process.
+     * @param outputFileName The name for the output feature file.
+     */
+    void startGenerateAudioFeatures(const QStringList& filePaths, const QString& outputFileName);
+
+    /**
+     * @brief Start asynchronous audio separation using the specified feature.
+     * @param filePaths List of audio file paths to separate.
+     * @param featureName The name of the feature file to use for separation.
+     */
+    void startSeparateAudio(const QStringList& filePaths, const QString& featureName);
 
     // =========================
     // File saving interfaces for workers
     // =========================
-    QString createOutputFilePath(const QString& outputFileName);                     // HTSAT feature
+    /**
+     * @brief Create an output file path for HTSAT features.
+     * @param outputFileName The name of the output file.
+     * @return The full path to the output file.
+     */
+    QString createOutputFilePath(const QString& outputFileName);
+
+    /**
+     * @brief Save audio embedding to a specified file path.
+     * @param embedding The embedding vector to save.
+     * @param filePath The path where to save the embedding.
+     * @return True if saved successfully, false otherwise.
+     */
     bool saveEmbeddingToFile(const std::vector<float>& embedding, const QString& filePath);
+
+    /**
+     * @brief Save audio embedding with a generated output file name.
+     * @param embedding The embedding vector to save.
+     * @param outputFileName The name for the output file.
+     * @return The path where the embedding was saved, or empty string on failure.
+     */
     QString saveEmbedding(const std::vector<float>& embedding, const QString& outputFileName);
 
-    QString createTempFilePath(const QString& baseName, int index, FileType type = FileType::TempSegment); // Temp chunk
-    bool saveWav(const torch::Tensor& waveform, const QString& filePath, int sampleRate = 32000);          // Temp chunk or SeparationResult
+    /**
+     * @brief Create a temporary file path for the specified type.
+     * @param baseName The base name for the temporary file.
+     * @param index The index to append to the base name.
+     * @param type The type of temporary file (default: TempSegment).
+     * @return The full path to the temporary file.
+     */
+    QString createTempFilePath(const QString& baseName, int index, FileType type = FileType::TempSegment);
+
+    /**
+     * @brief Save a waveform tensor to a WAV file.
+     * @param waveform The Torch tensor containing the audio waveform.
+     * @param filePath The path where to save the WAV file.
+     * @param sampleRate The sample rate of the audio (default: 32000 Hz).
+     * @return True if saved successfully, false otherwise.
+     */
+    bool saveWav(const torch::Tensor& waveform, const QString& filePath, int sampleRate = 32000);
+
+    /**
+     * @brief Save the audio separation result to a WAV file.
+     * @param waveform The Torch tensor containing the separated audio.
+     * @param outputName The name for the output WAV file.
+     * @return True if saved successfully, false otherwise.
+     */
     bool saveSeparationResult(const torch::Tensor& waveform, const QString& outputName);
 
     // =========================
     // Non-data / UI-related
     // =========================
-    void autoLoadSoundFeatures(); ///< 自動載入 sound feature，僅影響 UI/列表
+    /**
+     * @brief Automatically load sound features and update the UI lists.
+     */
+    void autoLoadSoundFeatures();
+
+    /**
+     * @brief Remove a sound feature from the resource manager.
+     * @param featureName The name of the feature to remove.
+     */
     void removeFeature(const QString& featureName);
 
     // =========================
     // Helper for deletion policy
     // =========================
+    /**
+     * @brief Check if a file type is deletable based on the deletion policy.
+     * @param type The file type to check.
+     * @return True if the file type is deletable, false otherwise.
+     */
     static bool isDeletable(FileType type);
 
     // =========================
     // Directory creation
     // =========================
+    /**
+     * @brief Create necessary output directories for the application.
+     */
     void createOutputDirectories();
 
 
@@ -134,14 +273,64 @@ private:
     void emitFolderAdded(const QString& folderPath, FileType type);
     void emitFolderRemoved(const QString& folderPath, FileType type);
 
-    void handleChunk(const QString& audioPath,
-                 const QString& featureName,
-                 const torch::Tensor& chunkData);
+    /**
+     * @brief Handles and saves intermediate audio chunks during separation processing.
+     *
+     * This slot is connected to the SeparationWorker's chunkReady signal and is responsible
+     * for saving individual processed audio chunks to temporary files on disk. Each chunk
+     * represents a portion of the audio that has been processed through the separation model
+     * and is saved as a WAV file for potential later use or cleanup.
+     *
+     * The chunking approach allows processing of long audio files that exceed memory limits
+     * by breaking them into manageable overlapping segments. This method ensures each chunk
+     * is persisted immediately after processing, preventing memory accumulation.
+     *
+     * @param chunkFilePath Full path where the chunk WAV file should be saved (typically
+     *                     a temporary file created by createTempFilePath)
+     * @param featureName Name of the separation feature used (for logging/debugging purposes)
+     * @param chunkData Processed audio chunk tensor with shape (channels, samples) or (1, samples, 1)
+     *                 containing the separated audio segment at the model's sample rate
+     *
+     * @note This method is automatically called by the separation worker thread and should
+     *       not be invoked manually.
+     * @note Failure to save chunks will result in orphaned processing resources.
+     * @note Chunk files are typically cleaned up after complete separation via deleteChunkFile signal.
+     *
+     * @see SeparationWorker::chunkReady signal, saveWav, createTempFilePath
+     */
+    void handleChunk(const QString& chunkFilePath,
+                     const QString& featureName,
+                     const torch::Tensor& chunkData);
 
-                 // 接收單檔案最終結果
+    /**
+     * @brief Handles and saves the final separated audio result for a processed file.
+     *
+     * This slot receives the completed separation result from the SeparationWorker after
+     * all chunk processing and overlap-add reconstruction is finished. It generates an
+     * appropriate output filename, saves the separated audio as a WAV file in the
+     * designated separation results directory, and logs the operation status.
+     *
+     * The output filename follows the convention: {original_filename}_{feature_name}.wav
+     * where the original file extension is removed and the feature name is appended.
+     * This allows multiple separations of the same audio file to coexist with different
+     * features applied.
+     *
+     * @param audioPath Original input audio file path (used to generate output filename)
+     * @param featureName Name of the separation feature used for this result
+     * @param finalTensor Separated audio tensor with shape (channels, samples) or (samples,)
+     *                   at 32kHz sample rate, representing the final reconstructed audio
+     *
+     * @note This method is automatically called upon separation completion and should not
+     *       be invoked manually.
+     * @note The output directory (SEPARATED_RESULT_DIR) is automatically created if needed.
+     * @note Processing state is reset after successful save, allowing subsequent operations.
+     * @note Stereo files maintain channel separation in the saved WAV format.
+     *
+     * @see SeparationWorker::separationFinished signal, saveWav, Constants::SEPARATED_RESULT_DIR
+     */
     void handleFinalResult(const QString& audioPath,
-                       const QString& featureName,
-                       const torch::Tensor& finalTensor);
+                           const QString& featureName,
+                           const torch::Tensor& finalTensor);
 
 };
 
