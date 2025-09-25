@@ -64,8 +64,8 @@ private:
     void setupUI();
 
 signals:
-    void fileRemoved(const QString& filePath);   ///< Signal emitted when the file is requested to be removed
-    void playRequested(const QString& filePath); ///< Signal emitted when play is requested for the file
+    void fileRemoved(const QString& filePath);
+    void playRequested(const QString& filePath);
 };
 
 #endif // FILEWIDGET_H

@@ -15,11 +15,13 @@
 #include "htsatworker.h"
 #include "separationworker.h"
 #include <QMetaObject>
+#include "filerepo.h"
+#include "asyncprocessor.h"
+#include "audioserializer.h"
+#include "filelocker.h"
+#include "logger.h"
 
-static QThread* htsatThread = nullptr;
-static HTSATWorker* htsatWorker = nullptr;
-static QThread* separationThread = nullptr;
-static SeparationWorker* separationWorker = nullptr;
+// Thread management has been moved to AsyncProcessor
 
 ResourceManager* ResourceManager::m_instance = nullptr;
 
@@ -37,64 +39,34 @@ ResourceManager* ResourceManager::instance()
 }
 
 ResourceManager::ResourceManager(QObject* parent)
-    : QObject(parent)
+    : QObject(parent),
+      m_fileRepo(nullptr),
+      m_asyncProcessor(nullptr),
+      m_serializer(nullptr),
+      m_fileLocker(nullptr)
 {
+    // Initialize components
+    m_fileRepo = new FileRepo(this);
+    m_serializer = new AudioSerializer();
+    m_asyncProcessor = new AsyncProcessor(m_serializer, this);
+    m_fileLocker = new FileLocker(this);
+
+    // Initialize data structures
     m_fileTypeData[FileType::WavForFeature] = FileTypeData();
     m_fileTypeData[FileType::SoundFeature] = FileTypeData();
     m_fileTypeData[FileType::WavForSeparation] = FileTypeData();
-
     m_isProcessing = false;
 
+    // Connect async processor signals
+    connect(m_asyncProcessor, &AsyncProcessor::processingStarted, this, &ResourceManager::processingStarted);
+    connect(m_asyncProcessor, &AsyncProcessor::processingProgress, this, &ResourceManager::processingProgress);
+    connect(m_asyncProcessor, &AsyncProcessor::processingFinished, this, &ResourceManager::processingFinished);
+    connect(m_asyncProcessor, &AsyncProcessor::separationProcessingFinished, this, &ResourceManager::separationProcessingFinished);
+    connect(m_asyncProcessor, &AsyncProcessor::processingError, this, &ResourceManager::processingError);
 
-    htsatThread = new QThread(this);
-    htsatWorker = new HTSATWorker();
-    htsatWorker->moveToThread(htsatThread);
-
-    connect(htsatThread, &QThread::finished, htsatWorker, &QObject::deleteLater);
-    connect(this, &ResourceManager::startHTSATProcessing, htsatWorker, &HTSATWorker::generateFeatures);
-    connect(htsatWorker, &HTSATWorker::progressUpdated, this, &ResourceManager::processingProgress);
-    connect(htsatWorker, &HTSATWorker::finished, this, [this](const std::vector<float>& avgEmb, const QString& outputFileName){
-        QString filePath = saveEmbedding(avgEmb, outputFileName);
-        m_isProcessing = false;
-        emit processingFinished(QStringList() << filePath);
-        emit featuresUpdated();
-    });
-    connect(htsatWorker, &HTSATWorker::error, this, [this](const QString& error){
-        m_isProcessing = false;
-        emit processingError(error);
-    });
-
-    htsatThread->start();
-
-    separationThread = new QThread(this);
-    separationWorker = new SeparationWorker();
-    separationWorker->moveToThread(separationThread);
-
-    connect(separationThread, &QThread::finished, separationWorker, &QObject::deleteLater);
-    connect(this, &ResourceManager::startSeparationProcessing, separationWorker, &SeparationWorker::processFile);
-    connect(separationWorker, &SeparationWorker::progressUpdated, this, &ResourceManager::processingProgress);
-    connect(separationWorker, &SeparationWorker::chunkReady, this, &ResourceManager::handleChunk);
-    connect(separationWorker, &SeparationWorker::separationFinished, this, &ResourceManager::handleFinalResult);
-    connect(separationWorker, &SeparationWorker::deleteChunkFile, this, [this](const QString& path) {
-        removeFile(path, FileType::TempSegment);
-    });
-
-    connect(separationWorker, &SeparationWorker::separationFinished, this, [this](const QString& audioPath, const QString& featureName, const torch::Tensor&) {
-        m_isProcessing = false;
-        QStringList results;
-        QString outputName = QFileInfo(audioPath).baseName() + "_" + featureName + ".wav";
-        QString outputPath = Constants::SEPARATED_RESULT_DIR + "/" + outputName;
-        results << outputPath;
-        emit separationProcessingFinished(results);
-});
-
-connect(separationWorker, &SeparationWorker::error, this, [this](const QString& error){
-    m_isProcessing = false;
-    emit processingError(error);
-});
-
-    separationThread->start();
-    
+    // Connect file locker signals
+    connect(m_fileLocker, &FileLocker::fileLocked, this, &ResourceManager::fileLocked);
+    connect(m_fileLocker, &FileLocker::fileUnlocked, this, &ResourceManager::fileUnlocked);
 }
 
 /**
@@ -105,7 +77,6 @@ void ResourceManager::createOutputDirectories()
     QStringList dirs = {
         Constants::OUTPUT_FEATURES_DIR,
         Constants::SEPARATED_RESULT_DIR,
-        Constants::TEMP_SEGMENTS_DIR
     };
 
     for (const QString& dirPath : dirs) {
@@ -123,9 +94,13 @@ void ResourceManager::createOutputDirectories()
 
 ResourceManager::~ResourceManager()
 {
-    for (const QString& filePath : m_lockedFiles) {
-        unlockFile(filePath);
-    }
+    // Cleanup components
+    delete m_fileRepo;
+    delete m_asyncProcessor;
+    delete m_serializer;
+    delete m_fileLocker;
+
+    // Cleanup data structures (keep for backward compatibility)
     m_lockedFiles.clear();
 
     for (auto it = m_fileTypeData.begin(); it != m_fileTypeData.end(); ++it) {
@@ -140,20 +115,6 @@ ResourceManager::~ResourceManager()
         data.files.clear();
     }
     m_fileTypeData.clear();
-
-    if (htsatThread) {
-        htsatThread->quit();
-        htsatThread->wait();
-        htsatThread = nullptr;
-        htsatWorker = nullptr;
-    }
-
-    if (separationThread) {
-        separationThread->quit();
-        separationThread->wait();
-        separationThread = nullptr;
-        separationWorker = nullptr;
-    }
 }
 
 /**
@@ -199,7 +160,7 @@ FolderWidget* ResourceManager::addFolder(const QString& folderPath, QWidget* fol
     } else {
         folderWidget = new FolderWidget(folderPath, folderParent);
         folderMap.insert(folderPath, folderWidget);
-        emitFolderAdded(folderPath, type);
+        emit folderAdded(folderPath, type);
     }
 
     QStringList newFiles;
@@ -208,7 +169,7 @@ FolderWidget* ResourceManager::addFolder(const QString& folderPath, QWidget* fol
         if (!isDuplicate(fullPath, type)) {
             newFiles.append(f);
             pathSet.insert(fullPath);
-            emitFileAdded(fullPath, type);
+            emit fileAdded(fullPath, type);
         }
     }
 
@@ -255,7 +216,7 @@ FileWidget* ResourceManager::addSingleFile(const QString& filePath, QWidget* fil
     FileWidget* fileWidget = new FileWidget(filePath, fileParent);
     fileMap.insert(fi.absoluteFilePath(), fileWidget);
     pathSet.insert(fi.absoluteFilePath());
-    emitFileAdded(fi.absoluteFilePath(), type);
+    emit fileAdded(fi.absoluteFilePath(), type);
 
     return fileWidget;
 }
@@ -276,7 +237,7 @@ void ResourceManager::removeFile(const QString& filePath, FileType type)
             FileWidget* fw = fileMap.take(filePath);
             fw->deleteLater();
         }
-        emitFileRemoved(filePath, type);
+        emit fileRemoved(filePath, type);
     }
 }
 
@@ -303,9 +264,9 @@ void ResourceManager::removeFolder(const QString& folderPath, FileType type)
         }
         for (const QString& filePath : toRemove) {
             pathSet.remove(filePath);
-            emitFileRemoved(filePath, type);
+            emit fileRemoved(filePath, type);
         }
-        emitFolderRemoved(folderPath, type);
+        emit folderRemoved(folderPath, type);
     }
 }
 
@@ -321,12 +282,8 @@ void ResourceManager::sortAll(Qt::SortOrder order)
  */
 bool ResourceManager::lockFile(const QString& filePath)
 {
-    if (FileUtils::setFileReadOnly(filePath, true) == FileUtils::FileOperationResult::Success) {
-        m_lockedFiles.insert(filePath);
-        emit fileLocked(filePath);
-        return true;
-    }
-    return false;
+    if (!m_fileLocker) return false;
+    return m_fileLocker->lockFile(filePath);
 }
 
 /**
@@ -336,12 +293,8 @@ bool ResourceManager::lockFile(const QString& filePath)
  */
 bool ResourceManager::unlockFile(const QString& filePath)
 {
-    if (FileUtils::setFileReadOnly(filePath, false) == FileUtils::FileOperationResult::Success) {
-        m_lockedFiles.remove(filePath);
-        emit fileUnlocked(filePath);
-        return true;
-    }
-    return false;
+    if (!m_fileLocker) return false;
+    return m_fileLocker->unlockFile(filePath);
 }
 
 /**
@@ -351,7 +304,8 @@ bool ResourceManager::unlockFile(const QString& filePath)
  */
 bool ResourceManager::isFileLocked(const QString& filePath) const
 {
-    return m_lockedFiles.contains(filePath);
+    if (!m_fileLocker) return false;
+    return m_fileLocker->isFileLocked(filePath);
 }
 
 /**
@@ -389,25 +343,7 @@ bool ResourceManager::isDuplicate(const QString& path, FileType type) const
     return m_fileTypeData.value(type).paths.contains(path);
 }
 
-void ResourceManager::emitFileAdded(const QString& path, FileType type)
-{
-    emit fileAdded(path, type);
-}
 
-void ResourceManager::emitFileRemoved(const QString& path, FileType type)
-{
-    emit fileRemoved(path, type);
-}
-
-void ResourceManager::emitFolderAdded(const QString& folderPath, FileType type)
-{
-    emit folderAdded(folderPath, type);
-}
-
-void ResourceManager::emitFolderRemoved(const QString& folderPath, FileType type)
-{
-    emit folderRemoved(folderPath, type);
-}
 
 /**
  * @brief Starts audio feature generation process.
@@ -416,18 +352,14 @@ void ResourceManager::emitFolderRemoved(const QString& folderPath, FileType type
  */
 void ResourceManager::startGenerateAudioFeatures(const QStringList& filePaths, const QString& outputFileName)
 {
-    if (m_isProcessing) return;
-    m_isProcessing = true;
-    emit processingStarted();
-    emit startHTSATProcessing(filePaths, outputFileName);
+    if (!m_asyncProcessor) return;
+    m_asyncProcessor->startFeatureGeneration(filePaths, outputFileName);
 }
 
-void ResourceManager::startSeparateAudio(const QStringList& filePaths, const QString& outputFileName)
+void ResourceManager::startSeparateAudio(const QStringList& filePaths, const QString& featureName)
 {
-    if (m_isProcessing) return;
-    m_isProcessing = true;
-    emit processingStarted();
-    emit startSeparationProcessing(filePaths, outputFileName);
+    if (!m_asyncProcessor) return;
+    m_asyncProcessor->startAudioSeparation(filePaths, featureName);
 }
 
 void ResourceManager::autoLoadSoundFeatures()
@@ -480,76 +412,8 @@ void ResourceManager::removeFeature(const QString& featureName)
  */
 bool ResourceManager::saveWav(const torch::Tensor& waveform, const QString& filePath, int sampleRate)
 {
-    qDebug() << "Debug: saveWav called for" << filePath;
-    qDebug() << "Debug: Input tensor shape:" << waveform.size(0) << "x" << (waveform.dim() > 1 ? waveform.size(1) : 1) << "x" << (waveform.dim() > 2 ? waveform.size(2) : 1);
-    qDebug() << "Debug: Input tensor dimensions:" << waveform.dim();
-    qDebug() << "Debug: Input tensor numel:" << waveform.numel();
-
-    QFile file(filePath);
-    if (!file.open(QIODevice::WriteOnly)) {
-        qDebug() << "Debug: Failed to open file for writing:" << filePath;
-        return false;
-    }
-
-    torch::Tensor audio2d;
-    if (waveform.dim() == 1) {
-        qDebug() << "Debug: Converting 1D tensor to 2D";
-        audio2d = waveform.unsqueeze(1);
-    } else if (waveform.dim() == 2) {
-        qDebug() << "Debug: Using 2D tensor as is";
-        audio2d = waveform;
-    } else if (waveform.dim() == 3 && waveform.size(0) == 1 && waveform.size(2) == 1) {
-        qDebug() << "Debug: Converting 3D tensor (1, frames, 1) to 2D";
-        qDebug() << "Debug: Before squeeze - shape:" << waveform.size(0) << "x" << waveform.size(1) << "x" << waveform.size(2);
-        torch::Tensor afterFirstSqueeze = waveform.squeeze(0);
-        qDebug() << "Debug: After squeeze(0) - shape:" << afterFirstSqueeze.size(0) << "x" << afterFirstSqueeze.size(1);
-        // For (frames, 1) tensor, we don't need squeeze(2), just unsqueeze to make it (frames, 1)
-        audio2d = afterFirstSqueeze;
-        qDebug() << "Debug: Using (frames, 1) tensor as 2D - shape:" << audio2d.size(0) << "x" << audio2d.size(1);
-    } else {
-        qDebug() << "Debug: Unsupported tensor shape for saveWav - dim:" << waveform.dim() << "shape:" << waveform.size(0) << "x" << (waveform.dim() > 1 ? waveform.size(1) : 1) << "x" << (waveform.dim() > 2 ? waveform.size(2) : 1);
-        return false;
-    }
-
-    qDebug() << "Debug: Final audio2d shape:" << audio2d.size(0) << "x" << audio2d.size(1);
-    qDebug() << "Debug: Final audio2d numel:" << audio2d.numel();
-
-    short channels = static_cast<short>(audio2d.size(1));
-    int64_t numSamples = audio2d.numel();
-    float* data = audio2d.data_ptr<float>();
-
-    qDebug() << "Debug: Writing WAV with channels:" << channels << "numSamples:" << numSamples;
-
-    file.write("RIFF", 4);
-    int fileSizePos = file.pos();
-    file.write("\x00\x00\x00\x00", 4);
-    file.write("WAVE", 4);
-
-    file.write("fmt ", 4);
-    int fmtSize = 16;
-    file.write((char*)&fmtSize, 4);
-    short format = 3;
-    file.write((char*)&format, 2);
-    file.write((char*)&channels, 2);
-    file.write((char*)&sampleRate, 4);
-    int byteRate = sampleRate * channels * 4;
-    file.write((char*)&byteRate, 4);
-    short blockAlign = channels * 4;
-    file.write((char*)&blockAlign, 2);
-    short bitsPerSample = 32;
-    file.write((char*)&bitsPerSample, 2);
-
-    file.write("data", 4);
-    int dataSize = static_cast<int>(numSamples * 4);
-    file.write((char*)&dataSize, 4);
-    file.write((char*)data, dataSize);
-
-    int totalSize = 36 + dataSize;
-    file.seek(fileSizePos);
-    file.write((char*)&totalSize, 4);
-
-    file.close();
-    return true;
+    if (!m_serializer) return false;
+    return m_serializer->saveWavToFile(waveform, filePath, sampleRate);
 }
 
 /**
@@ -607,42 +471,8 @@ QString ResourceManager::createOutputFilePath(const QString& outputFileName)
  */
 bool ResourceManager::saveEmbeddingToFile(const std::vector<float>& embedding, const QString& filePath)
 {
-    QFile file(filePath);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        qDebug() << "Failed to open output file:" << filePath;
-        return false;
-    }
-
-    QTextStream out(&file);
-    for (size_t i = 0; i < embedding.size(); ++i) {
-        out << embedding[i];
-        if (i < embedding.size() - 1) out << " ";
-    }
-    out << "\n";
-    file.close();
-
-    qDebug() << "Averaged embedding saved to:" << filePath;
-    return true;
-}
-
-/**
- * @brief Creates a temporary file path for a chunk or segment.
- * @param baseName Base name for the file.
- * @param index Index of the chunk.
- * @param type FileType to categorize the temp file.
- * @return Full path to the temporary file.
- */
-QString ResourceManager::createTempFilePath(const QString& baseName, int index, FileType type)
-{
-    QString tempFolder = Constants::TEMP_SEGMENTS_DIR;
-    QDir dir(tempFolder);
-    if (!dir.exists()) {
-        dir.mkpath(".");
-    }
-
-    QString suffix = "wav";
-    QString fileName = QString("%1_chunk_%2.%3").arg(baseName).arg(index).arg(suffix);
-    return dir.absoluteFilePath(fileName);
+    if (!m_serializer) return false;
+    return m_serializer->saveEmbeddingToFile(embedding, filePath);
 }
 
 /**
@@ -671,11 +501,6 @@ bool ResourceManager::isDeletable(FileType type)
         default:
             return false;
     }
-}
-
-void ResourceManager::handleChunk(const QString& chunkFilePath, const QString& featureName, const torch::Tensor& chunkData)
-{
-    saveWav(chunkData, chunkFilePath);
 }
 
 void ResourceManager::handleFinalResult(const QString& audioPath, const QString& featureName, const torch::Tensor& finalTensor)

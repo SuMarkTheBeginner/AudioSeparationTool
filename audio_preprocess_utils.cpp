@@ -29,9 +29,9 @@ torch::Tensor loadAudio(const QString& filePath, bool forceMono) {
         return torch::empty({0});
     }
 
-    // 建立 tensor (frames, channels)
+    // 建立 tensor (channels, frames)
     torch::Tensor tensor = torch::from_blob(
-        audio.data(), {sfinfo.frames, sfinfo.channels}, torch::kFloat32
+        audio.data(), {sfinfo.channels, sfinfo.frames}, torch::kFloat32
     ).clone();
 
     qDebug() << "AudioPreprocessUtils::loadAudio - Initial tensor shape:"
@@ -48,43 +48,25 @@ torch::Tensor loadAudio(const QString& filePath, bool forceMono) {
             qCritical() << "AudioPreprocessUtils::loadAudio - Failed to convert to mono:" << filePath;
             return torch::empty({0});
         }
-
-        // Only squeeze if we have a channel dimension to remove
-        if (tensor.dim() == 2 && tensor.size(1) == 1) {
-            tensor = tensor.squeeze(1); // shape=(frames,)
-            qDebug() << "AudioPreprocessUtils::loadAudio - Converted to mono, new shape:" << tensor.size(0);
-        } else {
-            qDebug() << "AudioPreprocessUtils::loadAudio - Already mono or unexpected shape after conversion: [" << tensor.size(0) << (tensor.dim() > 1 ? "," : "") << (tensor.dim() > 1 ? QString::number(tensor.size(1)) : "") << "]";
-        }
     }
 
     // === Step 2: Resample if needed ===
     if (sfinfo.samplerate != 32000) {
         qDebug() << "AudioPreprocessUtils::loadAudio - Resampling from"
-                 << sfinfo.samplerate << "to 32000 Hz";
+                << sfinfo.samplerate << " to 32000 Hz";
 
-        if (tensor.dim() == 1) {
-            // Mono case
-            tensor = resampleAudio(tensor.unsqueeze(0), sfinfo.samplerate, 32000).squeeze(0);
-        } else {
-            // Stereo case: resample each channel separately
-            std::vector<torch::Tensor> resampledChannels;
-            int numChannels = tensor.size(1);
-            for (int c = 0; c < numChannels; ++c) {
-                torch::Tensor channel = tensor.index({torch::indexing::Slice(), c});
-                torch::Tensor resampledChannel = resampleAudio(channel.unsqueeze(0), sfinfo.samplerate, 32000).squeeze(0);
-                resampledChannels.push_back(resampledChannel);
-            }
-            tensor = torch::stack(resampledChannels, 1);
-        }
+        tensor = resampleAudio(tensor, sfinfo.samplerate, 32000);
+
         if (tensor.numel() == 0) {
             qDebug() << "AudioPreprocessUtils::loadAudio - Failed to resample audio:" << filePath;
             return torch::empty({0});
         }
-        qDebug() << "AudioPreprocessUtils::loadAudio - Resampled tensor shape:" << tensor.size(0) << "x" << (tensor.dim() > 1 ? tensor.size(1) : 1);
+
+        qDebug() << "AudioPreprocessUtils::loadAudio - Resampled tensor shape: "
+                << tensor.size(0) << " x " << tensor.size(1);  // (channels, frames)
     }
 
-    return tensor; // shape = (frames,) for mono or (frames, channels) for stereo
+    return tensor; // (channels, frames)
 }
 
 
@@ -105,17 +87,21 @@ torch::Tensor resampleAudio(const torch::Tensor& audio, int originalSampleRate, 
         return audio.clone();
     }
 
-    // 確保輸入是 1D
-    torch::Tensor flatAudio = audio.flatten().contiguous();  // (frames)
-    int64_t frames = flatAudio.size(0);
+    // 假設輸入是 (channels, frames)
+    TORCH_CHECK(audio.dim() == 2, "Expected input shape (channels, frames)");
+    int64_t channels = audio.size(0);
+    int64_t frames = audio.size(1);
+
+    // 攤平成一維，方便丟給 libsamplerate
+    torch::Tensor flatAudio = audio.flatten().contiguous();  // (channels * frames)
 
     std::vector<float> inputVec(flatAudio.data_ptr<float>(),
-                                flatAudio.data_ptr<float>() + frames);
+                                flatAudio.data_ptr<float>() + flatAudio.size(0));
 
     double ratio = static_cast<double>(targetSampleRate) / originalSampleRate;
     long outputFrames = static_cast<long>(frames * ratio + 1);
 
-    std::vector<float> outputVec(outputFrames);
+    std::vector<float> outputVec(outputFrames * channels);
 
     SRC_DATA srcData;
     srcData.data_in = inputVec.data();
@@ -124,39 +110,37 @@ torch::Tensor resampleAudio(const torch::Tensor& audio, int originalSampleRate, 
     srcData.output_frames = outputFrames;
     srcData.src_ratio = ratio;
 
-    int error = src_simple(&srcData, SRC_SINC_BEST_QUALITY, 1);
+    int error = src_simple(&srcData, SRC_SINC_BEST_QUALITY, channels);
     if (error) {
         std::cerr << "Resampling error: " << src_strerror(error) << std::endl;
         return torch::empty({0});
     }
 
-    // 輸出 tensor (1D)
+    // 轉回 tensor (channels, newFrames)
     torch::Tensor resampled = torch::from_blob(
         outputVec.data(),
-        {srcData.output_frames_gen},
+        {channels, srcData.output_frames_gen},
         torch::kFloat32
     ).clone();
 
     return resampled;
 }
 
+
 torch::Tensor convertToMono(const torch::Tensor& audio, int numChannels) {
     if (audio.numel() == 0) return audio;
 
     auto sizes = audio.sizes();
-    if (sizes.size() == 1) {
-        // Already 1D mono - return as is (frames,)
-        qDebug() << "AudioPreprocessUtils::convertToMono - Input already mono 1D, returning as-is";
-        return audio;
-    } else if (sizes.size() == 2) {
-        if (sizes[1] == 1) {
-            // Already mono 2D - return as is (frames, 1)
+
+    if (sizes.size() == 2) {
+        if (sizes[0] == 1) {
+            // Already mono 2D - return as is (1, frames)
             qDebug() << "AudioPreprocessUtils::convertToMono - Input already mono 2D, returning as-is";
             return audio;
-        } else if (sizes[1] == numChannels && numChannels > 1) {
+        } else if (sizes[0] == numChannels && numChannels > 1) {
             // Convert stereo/multi-channel to mono
             qDebug() << "AudioPreprocessUtils::convertToMono - Converting from" << numChannels << "channels to mono";
-            return torch::mean(audio, 1, true);
+            return torch::mean(audio, 0, true);
         } else {
             std::cerr << "Audio tensor shape mismatch for convertToMono: expected channels " << numChannels << ", got " << sizes[1] << std::endl;
             return torch::empty({0});

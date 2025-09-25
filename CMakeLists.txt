@@ -97,6 +97,16 @@ set(PROJECT_SOURCES
     resourcemanager.h
     audioplayer.cpp
     audioplayer.h
+    logger.cpp
+    logger.h
+    filelocker.cpp
+    filelocker.h
+    audioserializer.cpp
+    audioserializer.h
+    filerepo.cpp
+    filerepo.h
+    asyncprocessor.cpp
+    asyncprocessor.h
 )
 
 # ---- build target ----

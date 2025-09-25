@@ -45,16 +45,27 @@ void FileWidget::setupUI()
     m_checkBox->setChecked(true);
     headerLayout->addWidget(m_checkBox);
 
+    // Debug: Connect checkbox state changes
+    connect(m_checkBox, &QCheckBox::stateChanged, this, [this](int state) {
+        QString stateStr = (state == Qt::Checked) ? "CHECKED" : "UNCHECKED";
+        qDebug() << "FileWidget::checkboxStateChanged - File:" << m_filePath
+                 << "State:" << stateStr;
+    });
+
     // File name label
     QFileInfo fi(m_filePath);
     fileNameLabel = new QLabel(fi.fileName(), headerWidget);
-    headerLayout->addWidget(fileNameLabel, 1);
+    fileNameLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    fileNameLabel->setMinimumWidth(50); // Ensure some minimum space for filename
+    fileNameLabel->setWordWrap(false);
+    headerLayout->addWidget(fileNameLabel, 1); // Give it expansion priority
 
     // Play button
     playButton = new QToolButton(headerWidget);
     playButton->setText("▶"); // Play icon
     playButton->setToolTip("播放此檔案");
     playButton->setFixedSize(20, 20);
+    playButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     headerLayout->addWidget(playButton);
 
     // Remove button ("X")
@@ -62,14 +73,10 @@ void FileWidget::setupUI()
     removeButton->setText("✕"); // 或者用 "X"、垃圾桶圖示
     removeButton->setToolTip("移除此檔案");
     removeButton->setFixedSize(20, 20);
+    removeButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     headerLayout->addWidget(removeButton);
 
     mainLayout->addWidget(headerWidget);
-
-    // Full path label
-    filePathLabel = new QLabel(m_filePath, this);
-    filePathLabel->setStyleSheet("color: gray; font-size: 10px; padding-left: 4px;");
-    mainLayout->addWidget(filePathLabel);
 
     // Install event filter for checkbox toggle
     headerWidget->installEventFilter(this);
@@ -94,7 +101,8 @@ void FileWidget::setupUI()
 /**
  * @brief Event filter to handle mouse events on the header widget.
  *
- * Toggles the checkbox when the header widget is clicked with the mouse button.
+ * Toggles the checkbox when the header widget is clicked with the mouse button,
+ * but ignores clicks within the checkbox area since it handles its own clicks.
  *
  * @param obj The object receiving the event.
  * @param event The event to filter.
@@ -103,8 +111,12 @@ void FileWidget::setupUI()
 bool FileWidget::eventFilter(QObject* obj, QEvent* event)
 {
     if (obj == headerWidget && event->type() == QEvent::MouseButtonRelease) {
-        m_checkBox->toggle();
-        return true;
+        QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
+        // Check if the click position is within the checkbox's rectangle
+        if (!m_checkBox->geometry().contains(mouseEvent->pos())) {
+            m_checkBox->toggle();
+            return true;
+        }
     }
     return QFrame::eventFilter(obj, event);
 }

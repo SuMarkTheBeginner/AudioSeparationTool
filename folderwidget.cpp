@@ -45,6 +45,24 @@ void FolderWidget::setupUI()
     folderCheckBox->setTristate(true);
     folderCheckBox->setCheckState(Qt::Checked);
 
+    // Debug: Connect folder checkbox state changes
+    connect(folderCheckBox, &QCheckBox::checkStateChanged, this, [this](Qt::CheckState state) {
+        QString stateStr;
+        switch (state) {
+            case Qt::Checked:
+                stateStr = "CHECKED (all files selected)";
+                break;
+            case Qt::Unchecked:
+                stateStr = "UNCHECKED (no files selected)";
+                break;
+            case Qt::PartiallyChecked:
+                stateStr = "PARTIALLY_CHECKED (some files selected)";
+                break;
+        }
+        qDebug() << "FolderWidget::folderCheckboxStateChanged - Folder:" << m_folderPath
+                 << "State:" << stateStr;
+    });
+
     QFileInfo fi(m_folderPath);
     folderNameLabel = new QLabel(fi.fileName(), headerWidget);
     arrowLabel = new QLabel("v", headerWidget);
@@ -68,11 +86,7 @@ void FolderWidget::setupUI()
     filesContainer->setLayout(filesLayout);
     mainLayout->addWidget(filesContainer);
 
-    QLabel* folderPathLabel = new QLabel(m_folderPath, this);
-    folderPathLabel->setStyleSheet("color: gray; font-size: 10px; padding-left: 4px;");
-    mainLayout->addWidget(folderPathLabel);
-
-    // Interaction logic for folder checkbox
+    // Interaction logic for folder checkbox - toggle all or none
     connect(folderCheckBox, &QCheckBox::checkStateChanged, this, [this](Qt::CheckState state) {
         if (m_updatingCheckStates) return;
         m_updatingCheckStates = true;
@@ -86,17 +100,11 @@ void FolderWidget::setupUI()
                 QSignalBlocker block(cb);
                 cb->setChecked(false);
             }
-        } else if (state == Qt::PartiallyChecked) {
-            // When partially checked, clicking should select all
-            QSignalBlocker block(folderCheckBox);
-            folderCheckBox->setCheckState(Qt::Checked);
-            for (WideCheckBox* cb : filesCheckBoxes) {
-                QSignalBlocker block(cb);
-                cb->setChecked(true);
-            }
         }
         m_updatingCheckStates = false;
     });
+
+    folderCheckBox->installEventFilter(this);
 
     for (WideCheckBox* cb : filesCheckBoxes) {
         connect(cb, &QCheckBox::checkStateChanged, this, &FolderWidget::refreshFolderCheckState);
@@ -178,6 +186,15 @@ void FolderWidget::addFilesInternal(const QStringList& files)
         filesCheckBoxes.append(cb);
 
         connect(cb, &QCheckBox::checkStateChanged, this, &FolderWidget::refreshFolderCheckState);
+
+        // Debug: Connect individual file checkbox state changes
+        connect(cb, &QCheckBox::checkStateChanged, this, [this, f](Qt::CheckState state) {
+            QString stateStr = (state == Qt::Checked) ? "CHECKED" : "UNCHECKED";
+            QString fullPath = QDir(m_folderPath).absoluteFilePath(f);
+            qDebug() << "FolderWidget::fileCheckboxStateChanged - Folder:" << m_folderPath
+                     << "File:" << f << "FullPath:" << fullPath << "State:" << stateStr;
+        });
+
         connect(removeBtn, &QPushButton::clicked, this, [this, f, fileItemWidget]() {
             filesLayout->removeWidget(fileItemWidget);
             fileItemWidget->deleteLater();
@@ -231,19 +248,31 @@ void FolderWidget::toggleFilesVisible()
 }
 
 /**
- * @brief Event filter to handle mouse events on header components.
+ * @brief Event filter to handle mouse events on header components and main checkbox.
  *
  * Toggles the file list visibility when the header widget, folder name label,
  * or arrow label is clicked with the mouse button.
+ * Handles main checkbox clicks to toggle between selected (all checked) and unselected (all unchecked),
+ * where selected includes checked or partially checked states.
  *
  * @param obj The object receiving the event.
  * @param event The event to filter.
- * @return true if the event is handled (mouse button release on header components), false otherwise.
+ * @return true if the event is handled, false otherwise.
  */
 bool FolderWidget::eventFilter(QObject* obj, QEvent* event)
 {
     if ((obj == headerWidget || obj == folderNameLabel || obj == arrowLabel) && event->type() == QEvent::MouseButtonRelease) {
         toggleFilesVisible();
+        return true;
+    }
+    if (obj == folderCheckBox && event->type() == QEvent::MouseButtonPress) {
+        Qt::CheckState curr = folderCheckBox->checkState();
+        if (curr == Qt::Checked || curr == Qt::PartiallyChecked) {
+            folderCheckBox->setCheckState(Qt::Unchecked);
+        } else {
+            folderCheckBox->setCheckState(Qt::Checked);
+        }
+        event->accept();
         return true;
     }
     return QFrame::eventFilter(obj, event);
@@ -266,18 +295,17 @@ QStringList FolderWidget::getSelectedFiles() const
 {
     QStringList selected;
     QDir dir(m_folderPath);
-    if (folderCheckBox->checkState() == Qt::Checked) {
-        // All files selected
-        for (WideCheckBox* cb : filesCheckBoxes) {
-            selected.append(dir.absoluteFilePath(cb->text()));
-        }
-    } else {
-        // Check individual
-        for (WideCheckBox* cb : filesCheckBoxes) {
-            if (cb->isChecked()) {
-                selected.append(dir.absoluteFilePath(cb->text()));
-            }
+    // Always check individual checkboxes to ensure only selected files are included
+    qDebug() << "FolderWidget::getSelectedFiles - Checking" << filesCheckBoxes.size() << "files in folder:" << m_folderPath;
+    for (WideCheckBox* cb : filesCheckBoxes) {
+        bool isChecked = cb->isChecked();
+        QString fileName = cb->text();
+        QString fullPath = dir.absoluteFilePath(fileName);
+        qDebug() << "  -" << fileName << "checked:" << isChecked << "fullPath:" << fullPath;
+        if (isChecked) {
+            selected.append(fullPath);
         }
     }
+    qDebug() << "FolderWidget::getSelectedFiles - Selected" << selected.size() << "files";
     return selected;
 }

@@ -58,7 +58,6 @@ const int PROGRESS_RANGE_MAX = 100;
 // New Constants for paths
 const QString OUTPUT_FEATURES_DIR = "output_features";       // Sound feature embeddings
 const QString SEPARATED_RESULT_DIR = "separated_results";     // Separation results
-const QString TEMP_SEGMENTS_DIR = "temp_chunks";             // Temporary chunks during processing
 
 // Model file paths (absolute paths for development)
 const QString HTSAT_MODEL_PATH = "C:/Users/aaa09/Desktop/Project/AudioSeparationTool_Windows/AudioSeparationTool/models/htsat_embedding_model.pt";              // HTSAT model folder
@@ -73,7 +72,6 @@ const int AUDIO_SAMPLE_RATE = 32000;        // Sample rate in Hz
 const int AUDIO_CLIP_SAMPLES = 320000;      // Number of samples per clip (10 seconds @ 32kHz)
 const float AUDIO_OVERLAP_RATE = 0.5f;      // Overlap rate for overlap-add processing
 
-// Debug announcement constants
 const QString DEBUG_FILE_SELECTED = "Debug: File selected - %1";
 const QString DEBUG_FILE_DESELECTED = "Debug: File deselected - %1";
 const QString DEBUG_PLAY_CLICKED = "Debug: Play button clicked for file - %1";
@@ -88,7 +86,7 @@ const QString DEBUG_FEATURE_CREATED = "Debug: Feature creation started for %1 fi
 const QString DEBUG_FOLDER_ADDED = "Debug: Folder added - %1";
 const QString DEBUG_FILE_ADDED = "Debug: File added - %1";
 
-
+const torch::Device DEFAULT_DEVICE = torch::kCPU;
 
 }
 

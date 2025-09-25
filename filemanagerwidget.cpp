@@ -139,6 +139,31 @@ void FileManagerWidget::addFolder(const QString& folderPath)
 {
     ResourceManager* rm = ResourceManager::instance();
 
+    // Debug: Print file type and selection state
+    QString fileTypeStr;
+    switch (m_fileType) {
+        case ResourceManager::FileType::WavForFeature:
+            fileTypeStr = "WavForFeature (for creating sound feature vectors)";
+            break;
+        case ResourceManager::FileType::WavForSeparation:
+            fileTypeStr = "WavForSeparation (for audio separation)";
+            break;
+        case ResourceManager::FileType::TempSegment:
+            fileTypeStr = "TempSegment (temporary processing chunks)";
+            break;
+        case ResourceManager::FileType::SoundFeature:
+            fileTypeStr = "SoundFeature (sound feature vectors)";
+            break;
+        case ResourceManager::FileType::SeparationResult:
+            fileTypeStr = "SeparationResult (final separated audio)";
+            break;
+        default:
+            fileTypeStr = "Unknown";
+            break;
+    }
+    qDebug() << "FileManagerWidget::addFolder - File type:" << fileTypeStr
+             << "State: SELECTED (folder being added) - Folder path:" << folderPath;
+
     // Check if folder exists and has WAV files
     QDir dir(folderPath);
     if (!dir.exists()) {
@@ -201,6 +226,31 @@ void FileManagerWidget::addFolder(const QString& folderPath)
 void FileManagerWidget::addSingleFile(const QString& filePath)
 {
     ResourceManager* rm = ResourceManager::instance();
+
+    // Debug: Print file type and selection state
+    QString fileTypeStr;
+    switch (m_fileType) {
+        case ResourceManager::FileType::WavForFeature:
+            fileTypeStr = "WavForFeature (for creating sound feature vectors)";
+            break;
+        case ResourceManager::FileType::WavForSeparation:
+            fileTypeStr = "WavForSeparation (for audio separation)";
+            break;
+        case ResourceManager::FileType::TempSegment:
+            fileTypeStr = "TempSegment (temporary processing chunks)";
+            break;
+        case ResourceManager::FileType::SoundFeature:
+            fileTypeStr = "SoundFeature (sound feature vectors)";
+            break;
+        case ResourceManager::FileType::SeparationResult:
+            fileTypeStr = "SeparationResult (final separated audio)";
+            break;
+        default:
+            fileTypeStr = "Unknown";
+            break;
+    }
+    qDebug() << "FileManagerWidget::addSingleFile - File type:" << fileTypeStr
+             << "State: SELECTED (file being added) - File path:" << filePath;
 
     QFileInfo fi(filePath);
     if (!fi.exists()) {

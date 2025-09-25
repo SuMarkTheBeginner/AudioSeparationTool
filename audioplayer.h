@@ -4,6 +4,7 @@
 #include <QWidget>
 #ifdef HAS_MULTIMEDIA
 #include <QMediaPlayer>
+#include <QAudioOutput>
 #include <QSlider>
 #include <QPushButton>
 #include <QHBoxLayout>

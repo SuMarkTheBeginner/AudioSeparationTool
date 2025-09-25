@@ -1,6 +1,7 @@
 #include "audioplayer.h"
 #include <QMessageBox>
 #include <QUrl>
+#include <QAudioOutput>
 
 #ifdef HAS_MULTIMEDIA
 /**
@@ -11,6 +12,10 @@ AudioPlayer::AudioPlayer(QWidget* parent)
     : QWidget(parent), mediaPlayer(new QMediaPlayer(this))
 {
     setupUI();
+
+    // Create audio output for Qt6
+    QAudioOutput* audioOutput = new QAudioOutput(this);
+    mediaPlayer->setAudioOutput(audioOutput);
 
     // Connect media player signals
     connect(mediaPlayer, &QMediaPlayer::positionChanged, this, &AudioPlayer::onPositionChanged);

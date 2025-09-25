@@ -269,6 +269,12 @@ void UseFeatureWidget::onProcessClicked()
         return;
     }
 
+    // Debug: Log the files that will be processed
+    qDebug() << "UseFeatureWidget::onProcessClicked - Files to process:" << filesToProcess.size();
+    for (const QString& filePath : filesToProcess) {
+        qDebug() << "  - " << filePath;
+    }
+
     // Clear previous results
     resultList->clear();
 

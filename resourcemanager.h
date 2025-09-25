@@ -16,6 +16,11 @@
 #ifndef Q_MOC_RUN
 #define slots
 #endif
+#include "filerepo.h"
+#include "asyncprocessor.h"
+#include "audioserializer.h"
+#include "filelocker.h"
+#include "logger.h"
 
 /**
  * @brief Singleton class for managing all file resources in the application.
@@ -172,15 +177,6 @@ public:
     QString saveEmbedding(const std::vector<float>& embedding, const QString& outputFileName);
 
     /**
-     * @brief Create a temporary file path for the specified type.
-     * @param baseName The base name for the temporary file.
-     * @param index The index to append to the base name.
-     * @param type The type of temporary file (default: TempSegment).
-     * @return The full path to the temporary file.
-     */
-    QString createTempFilePath(const QString& baseName, int index, FileType type = FileType::TempSegment);
-
-    /**
      * @brief Save a waveform tensor to a WAV file.
      * @param waveform The Torch tensor containing the audio waveform.
      * @param filePath The path where to save the WAV file.
@@ -256,51 +252,24 @@ private:
     ResourceManager(QObject* parent = nullptr);
     ~ResourceManager();
 
-    // Data storage
+    // Component instances
+    FileRepo* m_fileRepo;
+    AsyncProcessor* m_asyncProcessor;
+    AudioSerializer* m_serializer;
+    FileLocker* m_fileLocker;
+
+    // Legacy data structures for backward compatibility
     struct FileTypeData {
         QSet<QString> paths;
         QMap<QString, FolderWidget*> folders;
         QMap<QString, FileWidget*> files;
     };
     QMap<FileType, FileTypeData> m_fileTypeData;
-    QSet<QString> m_lockedFiles;
     bool m_isProcessing;
+    QSet<QString> m_lockedFiles;
 
     // Private helpers
     bool isDuplicate(const QString& path, FileType type) const;
-    void emitFileAdded(const QString& path, FileType type);
-    void emitFileRemoved(const QString& path, FileType type);
-    void emitFolderAdded(const QString& folderPath, FileType type);
-    void emitFolderRemoved(const QString& folderPath, FileType type);
-
-    /**
-     * @brief Handles and saves intermediate audio chunks during separation processing.
-     *
-     * This slot is connected to the SeparationWorker's chunkReady signal and is responsible
-     * for saving individual processed audio chunks to temporary files on disk. Each chunk
-     * represents a portion of the audio that has been processed through the separation model
-     * and is saved as a WAV file for potential later use or cleanup.
-     *
-     * The chunking approach allows processing of long audio files that exceed memory limits
-     * by breaking them into manageable overlapping segments. This method ensures each chunk
-     * is persisted immediately after processing, preventing memory accumulation.
-     *
-     * @param chunkFilePath Full path where the chunk WAV file should be saved (typically
-     *                     a temporary file created by createTempFilePath)
-     * @param featureName Name of the separation feature used (for logging/debugging purposes)
-     * @param chunkData Processed audio chunk tensor with shape (channels, samples) or (1, samples, 1)
-     *                 containing the separated audio segment at the model's sample rate
-     *
-     * @note This method is automatically called by the separation worker thread and should
-     *       not be invoked manually.
-     * @note Failure to save chunks will result in orphaned processing resources.
-     * @note Chunk files are typically cleaned up after complete separation via deleteChunkFile signal.
-     *
-     * @see SeparationWorker::chunkReady signal, saveWav, createTempFilePath
-     */
-    void handleChunk(const QString& chunkFilePath,
-                     const QString& featureName,
-                     const torch::Tensor& chunkData);
 
     /**
      * @brief Handles and saves the final separated audio result for a processed file.
@@ -326,7 +295,7 @@ private:
      * @note Processing state is reset after successful save, allowing subsequent operations.
      * @note Stereo files maintain channel separation in the saved WAV format.
      *
-     * @see SeparationWorker::separationFinished signal, saveWav, Constants::SEPARATED_RESULT_DIR
+     * @see SeparationWorker::finished signal, saveWav, Constants::SEPARATED_RESULT_DIR
      */
     void handleFinalResult(const QString& audioPath,
                            const QString& featureName,
